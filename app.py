@@ -22,11 +22,10 @@ LEVEL_ORDER = ["轻度", "中度", "重度"]
 # =============================
 # 游戏配置
 # =============================
-# ✅ 根据截图修正了 file_prefix
 GAMES_CONFIG = {
     "Red Dead Redemption 2": {
-        "file_prefix": "Red", # 截图显示为 Red_evt_...
-        "summary": "本作包含频繁的第一人称及第三人称枪战，并通过慢动作镜头特写子弹穿透敌人、血液自伤口喷涌而出的暴力画面。此外，游戏中还存在野兽撕咬人类并导致大量出血的血腥场景，以及静态的动物尸体图像。",
+        "file_prefix": "Red",
+        "summary": "游戏内容总结：本作包含频繁的第一人称及第三人称枪战，并通过慢动作镜头特写子弹穿透敌人、血液自伤口喷涌而出的暴力画面。此外，游戏中还存在野兽撕咬人类并导致大量出血的血腥场景，以及静态的动物尸体图像。",
         "video_duration_str": "01:01:03",
         "raw_events": [
             {"start_time": "07:30", "end_time": "11:23", "level": 2, "keywords": "与人枪战", "gif_timestamp": "09:29"},
@@ -37,8 +36,8 @@ GAMES_CONFIG = {
         ]
     },
     "Detroit: Become Human": {
-        "file_prefix": "Detroit:", # 截图显示为 Detroit:_evt_... (注意冒号)
-        "summary": "本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，并深入探讨了仿生人内部的分裂——例如，作为执法者的仿生人与其普通同类之间的对立。游戏中包含对犯罪现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
+        "file_prefix": "Detroit:",
+        "summary": "游戏内容总结：本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，并深入探讨了仿生人内部的分裂——例如，作为执法者的仿生人与其普通同类之间的对立。游戏中包含对犯罪现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
         "video_duration_str": "01:00:06",
         "raw_events": [
             {"start_time": "02:20", "end_time": "09:29", "level": 1, "keywords": "案发现场", "gif_timestamp": "02:27"},
@@ -46,8 +45,8 @@ GAMES_CONFIG = {
         ]
     },
     "Hades": {
-        "file_prefix": "Hades", # 截图显示为 Hades_evt_...
-        "summary": "快节奏的动作战斗是核心玩法，玩家在游戏中主要操控剑、矛、盾、弓等神话冷兵器与冥界怪物进行高频率的砍杀对抗。当敌人或玩家受伤时，画面会出现鲜红的血液喷溅特效和地面积血细节，但敌人死亡后通常会化为光点或烟雾迅速消散。",
+        "file_prefix": "Hades",
+        "summary": "游戏内容总结：快节奏的动作战斗是核心玩法，玩家在游戏中主要操控剑、矛、盾、弓等神话冷兵器与冥界怪物进行高频率的砍杀对抗。当敌人或玩家受伤时，画面会出现鲜红的血液喷溅特效和地面积血细节，但敌人死亡后通常会化为光点或烟雾迅速消散。",
         "video_duration_str": "01:00:22",
         "raw_events": [
             {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "05:14"},
@@ -118,10 +117,7 @@ with st.container():
     st.subheader("📊 暴力程度时间轴")
 
     events = []
-    
-    # 基准日期，用于 Plotly 时间轴计算
     base_time = pd.Timestamp("1970-01-01")
-    
     total_duration_sec = time_str_to_seconds(game_cfg["video_duration_str"])
     end_video_time = base_time + pd.Timedelta(seconds=total_duration_sec)
 
@@ -140,7 +136,7 @@ with st.container():
 
     df = pd.DataFrame(events)
 
-    # ✅ 强制补齐三个等级（即使没有事件）
+    # 补齐空等级
     for lvl in LEVEL_ORDER:
         if df.empty or lvl not in df["level"].values:
             df = pd.concat([
@@ -148,7 +144,7 @@ with st.container():
                 pd.DataFrame([{
                     "ID": -1,
                     "start": base_time,
-                    "end": base_time + pd.Timedelta(seconds=0.1), # 极短时间
+                    "end": base_time + pd.Timedelta(seconds=0.1),
                     "level": lvl,
                     "keywords": "无事件",
                     "gif_timestamp_str": ""
@@ -164,7 +160,7 @@ with st.container():
         y="level",
         color="level",
         category_orders={"level": LEVEL_ORDER},
-        custom_data=["ID"], # ✅ 将 ID 注入 custom_data 供点击捕获
+        custom_data=["ID"],  # ✅ 关键修改：将全局 ID 注入图表数据
         color_discrete_map={
             "轻度": "#FDB462",
             "中度": "#FB6A4A",
@@ -186,7 +182,7 @@ with st.container():
     selected = st.plotly_chart(
         fig,
         use_container_width=True,
-        on_select="rerun" # 必须开启 rerun 才能捕获点击
+        on_select="rerun"
     )
 
 # ======================================================
@@ -198,49 +194,46 @@ with st.container():
     selected_row = None
     
     try:
-        if selected and selected.get("selection") and selected["selection"].get("points"):
-            # ✅ 修复核心：通过 customdata[0] 获取 ID
+        # ✅ 修复逻辑：不再使用 pointIndex，改用 customdata 获取 ID
+        if selected and "selection" in selected and selected["selection"].get("points"):
             point_data = selected["selection"]["points"][0]
             if "customdata" in point_data:
                 clicked_id = point_data["customdata"][0]
-                # 根据 ID 在数据框中过滤出行
-                matching_rows = df[df["ID"] == clicked_id]
-                if not matching_rows.empty:
-                    selected_row = matching_rows.iloc[0]
+                # 在 DataFrame 中根据 ID 查找，忽略 dummy rows (ID=-1)
+                if clicked_id != -1:
+                    match = df[df["ID"] == clicked_id]
+                    if not match.empty:
+                        selected_row = match.iloc[0]
+                else:
+                    st.info("该暴力等级下未检测到具体事件。")
     except Exception as e:
         st.error(f"处理点击事件时发生错误: {e}")
 
     # 显示逻辑
     if selected_row is not None:
-        evt_id = selected_row["ID"]
+        evt_id = int(selected_row["ID"])
+        prefix = game_cfg["file_prefix"]
+        gif_time_str = selected_row["gif_timestamp_str"]
+        gif_seconds = time_str_to_seconds(gif_time_str)
         
-        if evt_id == -1:
-            st.info("该暴力等级下未检测到具体事件，但已完成检测与分类。")
-        else:
-            # 准备文件路径
-            prefix = game_cfg["file_prefix"]
-            gif_time_str = selected_row["gif_timestamp_str"]
-            gif_seconds = time_str_to_seconds(gif_time_str)
-            
-            # 拼接文件名：{前缀}_evt_{ID}_{秒数}s.gif
-            gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
-            gif_path = os.path.join("gif_cache", gif_filename)
+        gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
+        gif_path = os.path.join("gif_cache", gif_filename)
 
-            if os.path.exists(gif_path):
-                col1, col2 = st.columns([1.5, 1])
-                with col1:
-                    st.image(
-                        gif_path,
-                        use_container_width=True,
-                        key=f"img_{prefix}_{evt_id}" 
-                    )
-                with col2:
-                    st.markdown("### 事件详情")
-                    st.markdown(f"**关键词**：{selected_row['keywords']}")
-                    st.markdown(f"**暴力等级**：{selected_row['level']}")
-                    st.markdown(f"**发生时间**：{game_cfg['raw_events'][evt_id]['start_time']} - {game_cfg['raw_events'][evt_id]['end_time']}")
-            else:
-                st.warning(f"GIF 文件丢失")
-                st.caption(f"系统尝试读取路径: `{gif_path}`，但文件不存在。请检查 `gif_cache` 文件夹。")
+        if os.path.exists(gif_path):
+            col1, col2 = st.columns([1.5, 1])
+            with col1:
+                st.image(
+                    gif_path,
+                    use_container_width=True,
+                    key=f"img_{prefix}_{evt_id}" 
+                )
+            with col2:
+                st.markdown("### 事件详情")
+                st.markdown(f"**关键词**：{selected_row['keywords']}")
+                st.markdown(f"**暴力等级**：{selected_row['level']}")
+                st.markdown(f"**发生时间**：{game_cfg['raw_events'][evt_id]['start_time']} - {game_cfg['raw_events'][evt_id]['end_time']}")
+        else:
+            st.warning(f"GIF 文件丢失")
+            st.caption(f"路径: `{gif_path}`。请确认 `gif_cache` 文件夹包含此文件。")
     else:
         st.info("💡 请点击上方时间轴中的【彩色方块】以查看对应动态预览")
