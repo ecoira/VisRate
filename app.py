@@ -146,30 +146,26 @@ with st.container():
 
 
 # ======================================================
-# 🧱 区域三：事件动态预览 (支持 MP4 并修复 NameError)
+# 🧱 区域三：事件动态预览 (强制刷新版本)
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
-    # --- 修复点：显式初始化 selected_row，防止 NameError ---
     selected_row = None 
-    
     selection = selected.get("selection", {})
     points = selection.get("points", [])
 
     if points:
         point_data = points[0]
+        # 获取 ID 的逻辑保持不变
         raw_custom_data = point_data.get("customdata", [])
         clicked_id = -1
-        
-        # 兼容处理不同的数据返回格式
         if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
             clicked_id = int(raw_custom_data[0])
         elif isinstance(raw_custom_data, dict):
             clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
 
         if clicked_id != -1:
-            # 这里的 df 必须在之前的代码中已经定义好
             match = df[df["ID"] == clicked_id]
             if not match.empty:
                 selected_row = match.iloc[0]
@@ -178,24 +174,23 @@ with st.container():
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
         prefix = game_cfg["file_prefix"]
-        # 获取时间戳字符串并转换
         ts_str = selected_row["gif_timestamp_str"]
         gif_seconds = time_str_to_seconds(ts_str)
         
-        # 指向 mp4 文件路径
         video_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.mp4"
         local_video_path = os.path.join("static", "video_cache", video_filename)
         
-        # 在 Streamlit 中，开启 enableStaticServing 后，
-        # static 文件夹下的文件通常通过 "app/static/..." 路径访问
-        web_video_url = f"app/static/video_cache/{video_filename}"
+        # 🟢 关键改进 1：添加随机参数或 ID 参数防止浏览器缓存
+        # 加上 ?v={evt_id} 让浏览器认为这是一个不同的 URL
+        web_video_url = f"app/static/video_cache/{video_filename}?v={evt_id}"
 
         if os.path.exists(local_video_path):
-            # 使用 <video> 标签模拟 GIF：自动播放、循环、静音
+            # 🟢 关键改进 2：给 video 标签添加一个唯一的 ID
+            # 这样 Streamlit 在渲染 HTML 时，整个 DOM 树的指纹会发生变化
             st.markdown(
                 f'''
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <video width="600" autoplay loop muted playsinline 
+                <div id="video-container-{evt_id}" style="display: flex; flex-direction: column; align-items: center;">
+                    <video id="video-player-{evt_id}" width="600" autoplay loop muted playsinline 
                            style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
                         <source src="{web_video_url}" type="video/mp4">
                         您的浏览器不支持视频播放。
@@ -208,6 +203,6 @@ with st.container():
                 unsafe_allow_html=True
             )
         else:
-            st.error(f"视频加载失败：文件 {local_video_path} 不存在。")
+            st.error(f"视频文件未找到: {local_video_path}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
