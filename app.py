@@ -171,38 +171,11 @@ with st.container():
                 selected_row = match.iloc[0]
 
     # --- 渲染逻辑 ---
+    # 备选方案：使用 Streamlit 原生组件
     if selected_row is not None:
-        evt_id = int(selected_row["ID"])
-        prefix = game_cfg["file_prefix"]
-        ts_str = selected_row["gif_timestamp_str"]
-        gif_seconds = time_str_to_seconds(ts_str)
-        
-        video_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.mp4"
         local_video_path = os.path.join("static", "video_cache", video_filename)
-        
-        # 🟢 关键改进 1：添加随机参数或 ID 参数防止浏览器缓存
-        # 加上 ?v={evt_id} 让浏览器认为这是一个不同的 URL
-        web_video_url = f"app/static/video_cache/{video_filename}?v={evt_id}"
-
-        if os.path.exists(local_video_path):
-            # 🟢 关键改进 2：给 video 标签添加一个唯一的 ID
-            # 这样 Streamlit 在渲染 HTML 时，整个 DOM 树的指纹会发生变化
-            st.markdown(
-                f'''
-                <div id="video-container-{evt_id}" style="display: flex; flex-direction: column; align-items: center;">
-                    <video id="video-player-{evt_id}" width="600" autoplay loop muted playsinline 
-                           style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                        <source src="{web_video_url}" type="video/mp4">
-                        您的浏览器不支持视频播放。
-                    </video>
-                    <p style="margin-top: 10px; font-size: 16px;">
-                        <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
-                    </p>
-                </div>
-                ''',
-                unsafe_allow_html=True
-            )
-        else:
-            st.error(f"视频文件未找到: {local_video_path}")
+        # st.video 会自动处理刷新逻辑
+        st.video(local_video_path, loop=True, autoplay=True, muted=True)
+        st.write(f"**事件详情**：{selected_row['keywords']} | **等级**：{selected_row['level']}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
