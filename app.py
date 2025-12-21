@@ -184,30 +184,30 @@ with st.container():
 
     selected_row = None
     try:
-        # 使用 .get() 安全获取 selection 数据
+        # 1. 这种写法更兼容新版 Streamlit
         points = selected.get("selection", {}).get("points", [])
         
         if points:
             point_data = points[0]
-            # 安全获取 customdata，防止 IndexError: 0
+            # 2. 兼容处理：有些版本 customdata 是列表，有些是字典
             custom_data = point_data.get("customdata", [])
             
             if custom_data:
-                # 转换 ID 为整数以匹配 DataFrame
-                clicked_id = int(custom_data[0])
+                # 尝试获取第一个值，无论 custom_data 是列表还是字典
+                clicked_id = int(custom_data[0]) if isinstance(custom_data, list) else int(custom_data.get('0', -1))
                 
                 if clicked_id != -1:
-                    # 在 DataFrame 中寻找匹配行
                     match = df[df["ID"] == clicked_id]
                     if not match.empty:
                         selected_row = match.iloc[0]
     except Exception as e:
-        st.error(f"处理点击事件时发生错误: {e}")
+        # 这里的 e 就是你看到的 "0"，因为 KeyError(0) 的字符串表示就是 0
+        st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
 
     # 修改后的显示逻辑（在 if selected_row is not None: 内部）
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
-        prefix = game_cfg["file_prefix"].replace(":", "") # 确保前缀无冒号
+        prefix = game_cfg["file_prefix"]
         gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
 
         # 构建文件名
@@ -216,9 +216,11 @@ with st.container():
         gif_path = os.path.join("gif_cache", gif_filename)
 
         if os.path.exists(gif_path):
-            with open(gif_path, "rb") as f:
-                st.image(f.read(), format="gif", use_container_width=True)
+            # 直接使用路径，Streamlit 会自动处理读取
+            st.image(gif_path, caption=f"正在播放：{gif_filename}", use_container_width=True)
             st.markdown(f"**事件详情**：{selected_row['keywords']} | **等级**：{selected_row['level']}")
         else:
-            st.warning(f"⚠️ 找不到文件: `{gif_filename}`")
-            st.info(f"请检查 `gif_cache` 目录下是否存在该文件。当前尝试路径: `{os.path.abspath(gif_path)}`")
+            # 如果还是找不到，输出实际尝试的路径，方便你核对
+            st.error(f"❌ 找不到 GIF 文件")
+            st.code(f"预期路径: {gif_path}\n当前绝对路径: {os.path.abspath(gif_path)}")
+            st.write("当前 gif_cache 目录下的文件有：", os.listdir("gif_cache"))
