@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
-import base64
 
 # =============================
 # 页面配置
@@ -16,12 +15,6 @@ LEVEL_MAP = {
     1: "轻度",
     2: "中度",
     3: "重度"
-}
-
-LEVEL_COLOR = {
-    "轻度": "#7BC8A4",
-    "中度": "#F9C74F",
-    "重度": "#F94144"
 }
 
 LEVEL_ORDER = ["轻度", "中度", "重度"]
@@ -43,8 +36,8 @@ GAMES_CONFIG = {
         ]
     },
     "Detroit: Become Human": {
-        "file_prefix": "Detroit",
-        "summary": "游戏内容总结：本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，并深入探讨了仿生人内部的分化与觉醒。游戏中存在案发现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
+        "file_prefix": "Detroit:",
+        "summary": "游戏内容总结：本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，并深入探讨了仿生人内部的分裂——例如，作为执法者的仿生人与其普通同类之间的对立。游戏中包含对犯罪现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
         "video_duration_str": "01:00:06",
         "raw_events": [
             {"start_time": "02:20", "end_time": "09:29", "level": 1, "keywords": "案发现场", "gif_timestamp": "02:27"},
@@ -53,7 +46,7 @@ GAMES_CONFIG = {
     },
     "Hades": {
         "file_prefix": "Hades",
-        "summary": "游戏内容总结：快节奏的动作战斗是核心玩法，玩家在游戏中主要操控剑、矛、盾、弓等神话冷兵器进行高频率的砍杀对抗。当敌人或玩家受伤时，画面会出现鲜红的血液喷溅特效和地面积血细节，但敌人死亡后通常会化为光点或烟雾迅速消散。",
+        "summary": "游戏内容总结：快节奏的动作战斗是核心玩法，玩家在游戏中主要操控剑、矛、盾、弓等神话冷兵器与冥界怪物进行高频率的砍杀对抗。当敌人或玩家受伤时，画面会出现鲜红的血液喷涌特效和地面积血细节，但敌人死亡后通常会化为光点或烟雾迅速消散。",
         "video_duration_str": "01:00:22",
         "raw_events": [
             {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "05:14"},
@@ -67,127 +60,163 @@ GAMES_CONFIG = {
 }
 
 # =============================
-# 工具函数
+# 工具函数：时间字符串转秒
 # =============================
-def time_str_to_seconds(t):
-    parts = list(map(int, t.split(":")))
+def time_str_to_seconds(t: str) -> int:
+    parts = t.split(":")
     if len(parts) == 2:
         m, s = parts
-        return m * 60 + s
-    h, m, s = parts
-    return h * 3600 + m * 60 + s
-
-def gif_to_base64(path):
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode()
+        return int(m) * 60 + int(s)
+    elif len(parts) == 3:
+        h, m, s = parts
+        return int(h) * 3600 + int(m) * 60 + int(s)
+    return 0
 
 # =============================
-# 页面主体
+# 选择游戏
 # =============================
-st.title("🎮 游戏暴力内容分析")
-
-game_name = st.selectbox("请选择游戏", list(GAMES_CONFIG.keys()))
-game_cfg = GAMES_CONFIG[game_name]
-prefix = game_cfg["file_prefix"]
-
-st.markdown(
-    f"""
-    <div style="
-        background-color:#f5f7fa;
-        padding:16px;
-        border-radius:8px;
-        line-height:1.7;
-        font-size:15px;
-    ">
-    {game_cfg["summary"]}
-    </div>
-    """,
-    unsafe_allow_html=True
+selected_game = st.selectbox(
+    "选择游戏",
+    list(GAMES_CONFIG.keys())
 )
 
-# ======================================================
-# 🧱 区域二：暴力程度时间轴（Hover 播放 GIF）
-# ======================================================
-st.subheader("📊 暴力程度时间轴")
+game_cfg = GAMES_CONFIG[selected_game]
 
-events = []
-base_time = pd.Timestamp("1970-01-01")
-
-for idx, e in enumerate(game_cfg["raw_events"]):
-    gif_path = os.path.join("gifs", f"{prefix}_{e['gif_timestamp'].replace(':','')}.gif")
-    gif_b64 = gif_to_base64(gif_path) if os.path.exists(gif_path) else ""
-
-    events.append({
-        "ID": idx,
-        "start": base_time + pd.Timedelta(seconds=time_str_to_seconds(e["start_time"])),
-        "end": base_time + pd.Timedelta(seconds=time_str_to_seconds(e["end_time"])),
-        "level": LEVEL_MAP[e["level"]],
-        "keywords": e["keywords"],
-        "gif": gif_b64
-    })
-
-df = pd.DataFrame(events)
-
-fig = px.timeline(
-    df,
-    x_start="start",
-    x_end="end",
-    y="level",
-    color="level",
-    color_discrete_map=LEVEL_COLOR,
-    custom_data=["ID", "keywords", "gif"]
-)
-
-fig.update_traces(
-    hovertemplate="""
-    <b>%{customdata[1]}</b><br><br>
-    <img src="data:image/gif;base64,%{customdata[2]}" width="240">
-    <extra></extra>
-    """
-)
-
-fig.update_layout(
-    height=260,
-    margin=dict(l=20, r=20, t=10, b=20),
-    showlegend=True,
-    xaxis=dict(tickformat="%H:%M:%S", title="视频时间")
-)
-
-selected = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+# =============================
+# 🔥 动态标题
+# =============================
+st.title(f"🎮 {selected_game} 暴力内容分析")
 
 # ======================================================
-# 🧱 区域三：点击后事件详情（稳定版）
+# 🧱 区域一：游戏内容总结
 # ======================================================
-st.subheader("🎬 事件详情")
-
-if selected and selected.get("selection", {}).get("points"):
-    evt_id = selected["selection"]["points"][0]["customdata"][0]
-    row = df.iloc[evt_id]
-
-    gif_path = os.path.join(
-        "gifs",
-        f"{prefix}_{game_cfg['raw_events'][evt_id]['gif_timestamp'].replace(':','')}.gif"
+with st.container():
+    st.subheader("📄 游戏内容总结")
+    st.markdown(
+        f"""
+        <div style="
+            background-color:#f5f7fa;
+            padding:16px;
+            border-radius:8px;
+            line-height:1.7;
+            font-size:15px;
+        ">
+        {game_cfg["summary"]}
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
-    col1, col2 = st.columns([1.5, 1])
-    with col1:
+# ======================================================
+# 🧱 区域二：暴力程度时间轴
+# ======================================================
+with st.container():
+    st.subheader("📊 暴力程度时间轴")
+
+    events = []
+    base_time = pd.Timestamp("1970-01-01")
+    total_duration_sec = time_str_to_seconds(game_cfg["video_duration_str"])
+    end_video_time = base_time + pd.Timedelta(seconds=total_duration_sec)
+
+    for idx, e in enumerate(game_cfg["raw_events"]):
+        events.append({
+            "ID": idx,
+            "start": base_time + pd.Timedelta(seconds=time_str_to_seconds(e["start_time"])),
+            "end": base_time + pd.Timedelta(seconds=time_str_to_seconds(e["end_time"])),
+            "level": LEVEL_MAP[e["level"]],
+            "keywords": e["keywords"],
+            "gif_timestamp_str": e["gif_timestamp"]
+        })
+
+    df = pd.DataFrame(events)
+
+    for lvl in LEVEL_ORDER:
+        if df.empty or lvl not in df["level"].values:
+            df = pd.concat([
+                df,
+                pd.DataFrame([{
+                    "ID": -1,
+                    "start": base_time,
+                    "end": base_time + pd.Timedelta(seconds=0.1),
+                    "level": lvl,
+                    "keywords": "无事件",
+                    "gif_timestamp_str": ""
+                }])
+            ])
+
+    df = df.reset_index(drop=True)
+
+    fig = px.timeline(
+        df,
+        x_start="start",
+        x_end="end",
+        y="level",
+        color="level",
+        category_orders={"level": LEVEL_ORDER},
+        custom_data=["ID"],
+        color_discrete_map={
+            "轻度": "#FDB462",
+            "中度": "#FB6A4A",
+            "重度": "#CB181D"
+        },
+        range_x=[base_time, end_video_time]
+    )
+
+    fig.update_layout(
+        height=260,
+        margin=dict(l=20, r=20, t=10, b=20),
+        showlegend=True,
+        xaxis=dict(tickformat="%H:%M:%S", title="视频时间")
+    )
+
+    selected = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+
+# ======================================================
+# 🧱 区域三：事件动态预览
+# ======================================================
+with st.container():
+    st.subheader("🎬 事件动态预览")
+
+    selected_row = None
+    try:
+        if selected and "selection" in selected and selected["selection"].get("points"):
+            point_data = selected["selection"]["points"][0]
+            if "customdata" in point_data:
+                clicked_id = point_data["customdata"][0]
+                if clicked_id != -1:
+                    match = df[df["ID"] == clicked_id]
+                    if not match.empty:
+                        selected_row = match.iloc[0]
+    except Exception as e:
+        st.error(f"处理点击事件时发生错误: {e}")
+
+    if selected_row is not None:
+        evt_id = int(selected_row["ID"])
+        prefix = game_cfg["file_prefix"]
+        gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
+
+        gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
+        gif_path = os.path.join("gif_cache", gif_filename)
+
         if os.path.exists(gif_path):
-            with open(gif_path, "rb") as f:
-                st.image(
-                    f.read(),
-                    format="gif",
-                    use_container_width=True,
-                    key=f"gif_{prefix}_{evt_id}_{os.path.getmtime(gif_path)}"
+            col1, col2 = st.columns([1.5, 1])
+            with col1:
+                with open(gif_path, "rb") as f:
+                    st.image(
+                        f.read(),
+                        format="gif",
+                        use_container_width=True,
+                        key=f"img_{prefix}_{evt_id}_{os.path.getmtime(gif_path)}"
+                    )
+            with col2:
+                st.markdown("### 事件详情")
+                st.markdown(f"**关键词**：{selected_row['keywords']}")
+                st.markdown(f"**暴力等级**：{selected_row['level']}")
+                st.markdown(
+                    f"**发生时间**：{game_cfg['raw_events'][evt_id]['start_time']} - {game_cfg['raw_events'][evt_id]['end_time']}"
                 )
         else:
             st.warning("GIF 文件丢失")
-
-    with col2:
-        st.markdown("### 事件信息")
-        st.markdown(f"**关键词**：{row['keywords']}")
-        st.markdown(f"**暴力等级**：{row['level']}")
-        st.markdown(
-            f"**发生时间**：{game_cfg['raw_events'][evt_id]['start_time']} - {game_cfg['raw_events'][evt_id]['end_time']}"
-        )
-else:
-    st.info("点击时间轴中的事件查看详情，或直接悬停播放 GIF")
+            st.caption(f"路径: `{gif_path}`")
+    else:
+        st.info("💡 请点击上方时间轴中的【彩色方块】以查看对应动态预览")
