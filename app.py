@@ -146,7 +146,7 @@ with st.container():
 
 
 # ======================================================
-# 🧱 区域三：事件动态预览 (强制刷新版本)
+# 🧱 区域三：事件动态预览 (修复 NameError + 强制刷新)
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
@@ -157,7 +157,6 @@ with st.container():
 
     if points:
         point_data = points[0]
-        # 获取 ID 的逻辑保持不变
         raw_custom_data = point_data.get("customdata", [])
         clicked_id = -1
         if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
@@ -171,11 +170,35 @@ with st.container():
                 selected_row = match.iloc[0]
 
     # --- 渲染逻辑 ---
-    # 备选方案：使用 Streamlit 原生组件
     if selected_row is not None:
+        # 1. 【必须步骤】先获取变量，构造文件名，解决 NameError
+        evt_id = int(selected_row["ID"])
+        prefix = game_cfg["file_prefix"]
+        ts_str = selected_row["gif_timestamp_str"]
+        gif_seconds = time_str_to_seconds(ts_str)
+        
+        # 2. 构造文件名
+        video_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.mp4"
         local_video_path = os.path.join("static", "video_cache", video_filename)
-        # st.video 会自动处理刷新逻辑
-        st.video(local_video_path, loop=True, autoplay=True, muted=True)
-        st.write(f"**事件详情**：{selected_row['keywords']} | **等级**：{selected_row['level']}")
+
+        if os.path.exists(local_video_path):
+            # 3. 【核心改进】使用 st.video 并添加动态 key
+            # key=f"vid_{evt_id}" 确保每次切换 ID 时，Streamlit 都会销毁旧播放器并创建新的
+            st.video(
+                local_video_path, 
+                loop=True, 
+                autoplay=True, 
+                muted=True,
+                key=f"video_player_{evt_id}" 
+            )
+            
+            # 使用 Markdown 让文字更好看点
+            st.markdown(f"""
+                <p style="text-align: center; font-size: 18px; margin-top: 10px;">
+                    <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
+                </p>
+            """, unsafe_allow_html=True)
+        else:
+            st.error(f"找不到视频文件: {local_video_path}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
