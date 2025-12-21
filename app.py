@@ -178,17 +178,30 @@ with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
+
     try:
-        if selected and "selection" in selected and selected["selection"].get("points"):
+        if (
+            selected
+            and isinstance(selected, dict)
+            and "selection" in selected
+            and isinstance(selected["selection"], dict)
+            and "points" in selected["selection"]
+            and isinstance(selected["selection"]["points"], list)
+            and len(selected["selection"]["points"]) > 0
+        ):
             point_data = selected["selection"]["points"][0]
-            if "customdata" in point_data:
+
+            if "customdata" in point_data and point_data["customdata"]:
                 clicked_id = point_data["customdata"][0]
+
                 if clicked_id != -1:
                     match = df[df["ID"] == clicked_id]
                     if not match.empty:
                         selected_row = match.iloc[0]
+
     except Exception as e:
-        st.error(f"处理点击事件时发生错误: {e}")
+        st.error(f"处理点击事件时发生错误: {repr(e)}")
+
 
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
