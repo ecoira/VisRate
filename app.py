@@ -151,16 +151,32 @@ with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
-    points = selected.get("selection", {}).get("points", [])
+    
+    # 获取选中的点
+    selection = selected.get("selection", {})
+    points = selection.get("points", [])
+
     if points:
+        # 获取第一个选中的点的数据
         point_data = points[0]
-        custom_data = point_data.get("customdata", [])
-        if custom_data:
-            clicked_id = int(custom_data[0])
-            if clicked_id != -1:
-                match = df[df["ID"] == clicked_id]
-                if not match.empty:
-                    selected_row = match.iloc[0]
+        
+        # 核心修复：安全地提取 custom_data
+        # custom_data 在不同版本的 Streamlit/Plotly 中可能是列表，也可能是字典
+        raw_custom_data = point_data.get("customdata", [])
+        
+        clicked_id = -1
+        
+        if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
+            clicked_id = int(raw_custom_data[0])
+        elif isinstance(raw_custom_data, dict):
+            # 如果是字典，尝试获取键为 "0" 或 0 的值
+            clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
+
+        # 排除 ID 为 -1 的无效点（例如我们补充的空白背景点）
+        if clicked_id != -1:
+            match = df[df["ID"] == clicked_id]
+            if not match.empty:
+                selected_row = match.iloc[0]
 
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
