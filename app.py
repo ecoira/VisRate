@@ -150,6 +150,17 @@ with st.container():
 with st.container():
     st.subheader("🎬 事件动态预览")
 
+    # 生成当前游戏所有可能的 GIF URL
+    all_events = game_cfg["raw_events"]
+    preload_html = ""
+    for idx, e in enumerate(all_events):
+        sec = time_str_to_seconds(e["gif_timestamp"])
+        url = f"/app/static/gif_cache/{game_cfg['file_prefix']}_evt_{idx}_{sec}s.gif"
+        preload_html += f'<link rel="preload" as="image" href="{url}">'
+    
+    # 插入隐藏的预加载标签
+    st.components.v1.html(f'<div style="display:none;">{preload_html}</div>', height=0)
+
     selected_row = None
     
     # 获取选中的点
