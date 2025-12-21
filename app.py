@@ -146,44 +146,68 @@ with st.container():
 
 
 # ======================================================
-# 🧱 区域三：事件动态预览 (已优化为 MP4 格式)
+# 🧱 区域三：事件动态预览 (支持 MP4 并修复 NameError)
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
-    # ... (保留获取 selected_row 的逻辑不变) ...
+    # --- 修复点：显式初始化 selected_row，防止 NameError ---
+    selected_row = None 
+    
+    selection = selected.get("selection", {})
+    points = selection.get("points", [])
 
+    if points:
+        point_data = points[0]
+        raw_custom_data = point_data.get("customdata", [])
+        clicked_id = -1
+        
+        # 兼容处理不同的数据返回格式
+        if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
+            clicked_id = int(raw_custom_data[0])
+        elif isinstance(raw_custom_data, dict):
+            clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
+
+        if clicked_id != -1:
+            # 这里的 df 必须在之前的代码中已经定义好
+            match = df[df["ID"] == clicked_id]
+            if not match.empty:
+                selected_row = match.iloc[0]
+
+    # --- 渲染逻辑 ---
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
         prefix = game_cfg["file_prefix"]
-        gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
+        # 获取时间戳字符串并转换
+        ts_str = selected_row["gif_timestamp_str"]
+        gif_seconds = time_str_to_seconds(ts_str)
         
-        # 1. 修改后缀名为 .mp4
+        # 指向 mp4 文件路径
         video_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.mp4"
-        
-        # 2. 指向新的 video_cache 文件夹
         local_video_path = os.path.join("static", "video_cache", video_filename)
         
-        # 3. 构造 Web 访问 URL
-        # 注意：开启 enableStaticServing 后，URL 格式通常为 app/static/...
+        # 在 Streamlit 中，开启 enableStaticServing 后，
+        # static 文件夹下的文件通常通过 "app/static/..." 路径访问
         web_video_url = f"app/static/video_cache/{video_filename}"
 
         if os.path.exists(local_video_path):
-            # 使用 HTML5 <video> 标签模拟 GIF 效果：
-            # autoplay (自动播放), loop (循环), muted (静音 - 自动播放必须静音), playsinline
+            # 使用 <video> 标签模拟 GIF：自动播放、循环、静音
             st.markdown(
                 f'''
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <video width="600" autoplay loop muted playsinline style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <video width="600" autoplay loop muted playsinline 
+                           style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
                         <source src="{web_video_url}" type="video/mp4">
-                        您的浏览器不支持视频标签。
+                        您的浏览器不支持视频播放。
                     </video>
-                    <p style="margin-top: 10px; font-size: 16px;"><b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}</p>
+                    <p style="margin-top: 10px; font-size: 16px;">
+                        <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
+                    </p>
                 </div>
                 ''',
                 unsafe_allow_html=True
             )
         else:
-            st.warning(f"未找到对应的视频文件: {local_video_path}")
+            st.error(f"视频加载失败：文件 {local_video_path} 不存在。")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
