@@ -3,8 +3,21 @@ import pandas as pd
 import plotly.express as px
 import os
 
-# --- 页面配置 ---
-st.set_page_config(page_title="暴力事件分析器", layout="wide")
+# =============================
+# 基础配置
+# =============================
+st.set_page_config(
+    page_title="暴力内容分析系统",
+    layout="wide"
+)
+
+LEVEL_MAP = {
+    1: "轻度",
+    2: "中度",
+    3: "重度"
+}
+
+LEVEL_ORDER = ["轻度", "中度", "重度"]
 
 # --- 数据配置 (同步自 test.py) ---
 GAMES_CONFIG = {
@@ -44,75 +57,131 @@ GAMES_CONFIG = {
     }
 }
 
-# 修正分级映射
-LEVEL_MAP = {1: "轻度", 2: "中度", 3: "重度"}
-COLOR_MAP = {"轻度": "#FFA500", "中度": "#FF6347", "重度": "#DC143C"}
+# =============================
+# 页面标题
+# =============================
+st.title("🎮 Red Dead Redemption 2 暴力内容分析")
 
-def parse_time(time_str):
-    parts = list(map(int, time_str.split(':')))
-    return parts[0] * 60 + parts[1] if len(parts) == 2 else parts[0] * 3600 + parts[1] * 60 + parts[2]
-
-# --- UI 界面 ---
-selected_game = st.sidebar.selectbox("选择游戏", list(GAMES_CONFIG.keys()))
-config = GAMES_CONFIG[selected_game]
-
-st.title(f"🎮 {selected_game} 分析")
-
-# 1. 游戏总结：增大字体 [要求1]
-st.markdown(f"""
-    <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px;">
-        <p style="font-size: 24px; font-weight: bold; color: #31333F; line-height: 1.6;">
-            {config['summary']}
-        </p>
-    </div>
-""", unsafe_allow_html=True)
-
-# 数据转换
-events = []
-for i, e in enumerate(config["raw_events"]):
-    events.append({
-        "ID": i,
-        "开始时间": pd.to_datetime(parse_time(e["start_time"]), unit='s'),
-        "结束时间": pd.to_datetime(parse_time(e["end_time"]), unit='s'),
-        "分级": LEVEL_MAP.get(e["level"], "未知"), # 修复分级 [要求3]
-        "gif_s": parse_time(e["gif_timestamp"])
-    })
-df = pd.DataFrame(events)
-
-# 2. 绘制图表并添加引导箭头 [要求4]
-fig = px.timeline(
-    df, x_start="开始时间", x_end="结束时间", y="分级", color="分级",
-    color_discrete_map=COLOR_MAP,
-    category_orders={"分级": ["轻度", "中度", "重度"]} # 强制显示三个级别 [要求3]
+selected_game = st.selectbox(
+    "选择游戏",
+    list(GAMES_CONFIG.keys())
 )
 
-# 模拟原代码中的箭头引导 [要求4]
-if not df.empty:
-    first_evt = df.iloc[0]
-    fig.add_annotation(
-        x=first_evt["开始时间"], y=first_evt["分级"],
-        text="点击方块查看GIF图像",
-        showarrow=True, arrowhead=2, ax=40, ay=-40,
-        bgcolor="#FFFACD", bordercolor="orange"
+# ======================================================
+# 🧱 区域一：游戏内容总结
+# ======================================================
+with st.container():
+    st.subheader("📄 游戏内容总结")
+
+    st.markdown(
+        f"""
+        <div style="
+            background-color:#f5f7fa;
+            padding:16px;
+            border-radius:8px;
+            line-height:1.7;
+            font-size:15px;
+        ">
+        {GAMES_CONFIG[selected_game]["summary"]}
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
-fig.update_layout(xaxis_tickformat='%H:%M:%S', height=400)
-selected_points = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+# ======================================================
+# 🧱 区域二：暴力程度时间轴（始终显示 3 个等级）
+# ======================================================
+with st.container():
+    st.subheader("📊 暴力程度时间轴")
 
-# 3. 详情展示：仅显示 GIF [要求2]
-st.subheader("🎬 事件动态预览")
-if selected_points and selected_points["selection"]["points"]:
-    idx = selected_points["selection"]["points"][0]["point_index"]
-    evt = events[idx]
-    
-    # 路径匹配
-    game_prefix = selected_game.split(' ')[0]
-    gif_path = f"gif_cache/{game_prefix}_evt_{evt['ID']}_{evt['gif_s']}s.gif"
+    events = []
+    for idx, e in enumerate(GAMES_CONFIG[selected_game]["raw_events"]):
+        events.append({
+            "ID": idx,
+            "start": e["start_s"],
+            "end": e["end_s"],
+            "level": LEVEL_MAP[e["level"]],
+            "keywords": e["keywords"],
+            "gif_s": e["gif_s"]
+        })
 
-    # 居中显示 GIF，不显示任何文字标签 [要求2]
-    if os.path.exists(gif_path):
-        st.image(gif_path, use_container_width=True)
+    df = pd.DataFrame(events)
+
+    # 🔴 核心修复：补齐缺失的等级（防止误导）
+    for lvl in LEVEL_ORDER:
+        if df.empty or lvl not in df["level"].values:
+            df = pd.concat([
+                df,
+                pd.DataFrame([{
+                    "ID": -1,
+                    "start": 0,
+                    "end": 0.1,
+                    "level": lvl,
+                    "keywords": "无事件",
+                    "gif_s": -1
+                }])
+            ])
+
+    fig = px.timeline(
+        df,
+        x_start="start",
+        x_end="end",
+        y="level",
+        color="level",
+        category_orders={"level": LEVEL_ORDER},
+        custom_data=["ID"],
+        color_discrete_map={
+            "轻度": "#FDB462",
+            "中度": "#FB6A4A",
+            "重度": "#CB181D"
+        }
+    )
+
+    fig.update_layout(
+        height=260,
+        margin=dict(l=20, r=20, t=10, b=20),
+        showlegend=True
+    )
+
+    selected = st.plotly_chart(
+        fig,
+        use_container_width=True,
+        on_select="rerun"
+    )
+
+# ======================================================
+# 🧱 区域三：事件动态预览（GIF 可切换 + 真·动态）
+# ======================================================
+with st.container():
+    st.subheader("🎬 事件动态预览")
+
+    if selected and selected["selection"]["points"]:
+        point = selected["selection"]["points"][0]
+        evt_id = point["customdata"][0]
+
+        if evt_id == -1:
+            st.info("该暴力等级下未检测到具体事件，但已完成检测与分类。")
+        else:
+            evt = df[df["ID"] == evt_id].iloc[0]
+
+            gif_path = f"gif_cache/RDR2_evt_{evt_id}_{int(evt['gif_s'])}s.gif"
+
+            if os.path.exists(gif_path):
+                # ✅ 核心修复：使用唯一 key，强制刷新 GIF
+                st.image(
+                    gif_path,
+                    use_container_width=True,
+                    key=f"gif_evt_{evt_id}_{evt['gif_s']}"
+                )
+
+                st.markdown(
+                    f"""
+                    **关键词**：{evt['keywords']}  
+                    **时间段**：{int(evt['start'])}s – {int(evt['end'])}s  
+                    **暴力等级**：{evt['level']}
+                    """
+                )
+            else:
+                st.warning(f"未找到 GIF 文件：{gif_path}")
     else:
-        st.error(f"未找到 GIF: {gif_path}")
-else:
-    st.info("💡 请点击上方时间轴中的方块。")
+        st.info("💡 请点击上方时间轴中的事件块以查看对应动态预览")
