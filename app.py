@@ -115,15 +115,23 @@ with st.container():
     st.subheader("📊 暴力程度时间轴")
 
     events = []
+    
+    # 设定一个基准日期，用于让 Plotly Timeline 正确识别时间差
+    base_time = pd.Timestamp("1970-01-01")
+    
+    # 计算视频总时长对象，用于固定 X 轴范围
+    total_duration_sec = time_str_to_seconds(game_cfg["video_duration_str"])
+    end_video_time = base_time + pd.Timedelta(seconds=total_duration_sec)
 
     for idx, e in enumerate(game_cfg["raw_events"]):
         start_s = time_str_to_seconds(e["start_time"])
         end_s = time_str_to_seconds(e["end_time"])
 
+        # 转换为 datetime 对象，px.timeline 才能渲染出正确的“方块”宽度
         events.append({
             "ID": idx,
-            "start": start_s,
-            "end": end_s,
+            "start": base_time + pd.Timedelta(seconds=start_s),
+            "end": base_time + pd.Timedelta(seconds=end_s),
             "level": LEVEL_MAP[e["level"]],
             "keywords": e["keywords"],
             "gif_ts": e["gif_timestamp"]
@@ -138,8 +146,8 @@ with st.container():
                 df,
                 pd.DataFrame([{
                     "ID": -1,
-                    "start": 0,
-                    "end": 1,
+                    "start": base_time, # 使用相同的基准时间
+                    "end": base_time + pd.Timedelta(seconds=1), # 极短时间，避免视觉干扰
                     "level": lvl,
                     "keywords": "无事件",
                     "gif_ts": ""
@@ -158,13 +166,18 @@ with st.container():
             "轻度": "#FDB462",
             "中度": "#FB6A4A",
             "重度": "#CB181D"
-        }
+        },
+        range_x=[base_time, end_video_time] # 固定 X 轴范围为视频全长
     )
 
     fig.update_layout(
         height=260,
         margin=dict(l=20, r=20, t=10, b=20),
-        showlegend=True
+        showlegend=True,
+        xaxis=dict(
+            tickformat="%H:%M:%S",  # 格式化 X 轴标签为时:分:秒
+            title="视频时间"
+        )
     )
 
     selected = st.plotly_chart(
@@ -188,6 +201,7 @@ with st.container():
             evt = df[df["ID"] == evt_id].iloc[0]
 
             game_prefix = selected_game.replace(" ", "_").replace(":", "")
+            # 注意：这里需要确保您的 gif_cache 文件夹中有对应的文件
             gif_path = f"gif_cache/{game_prefix}_evt_{evt_id}_{evt['gif_ts'].replace(':','')}.gif"
 
             if os.path.exists(gif_path):
@@ -208,5 +222,6 @@ with st.container():
                 )
             else:
                 st.warning(f"未找到 GIF 文件：{gif_path}")
+                st.caption("请确认 gif_cache 文件夹中是否存在对应的 GIF 文件。")
     else:
         st.info("💡 请点击上方时间轴中的事件块以查看对应动态预览")
