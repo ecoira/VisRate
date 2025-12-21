@@ -26,7 +26,7 @@ LEVEL_ORDER = ["轻度", "中度", "重度"]
 GAMES_CONFIG = {
     "Red Dead Redemption 2": {
         "file_prefix": "Red", # 截图显示为 Red_evt_...
-        "summary": "游戏内容总结：本作包含频繁的第一人称及第三人称枪战，并通过慢动作镜头特写子弹穿透敌人、血液自伤口喷涌而出的暴力画面。此外，游戏中还存在野兽撕咬人类并导致大量出血的血腥场景，以及静态的动物尸体图像。",
+        "summary": "本作包含频繁的第一人称及第三人称枪战，并通过慢动作镜头特写子弹穿透敌人、血液自伤口喷涌而出的暴力画面。此外，游戏中还存在野兽撕咬人类并导致大量出血的血腥场景，以及静态的动物尸体图像。",
         "video_duration_str": "01:01:03",
         "raw_events": [
             {"start_time": "07:30", "end_time": "11:23", "level": 2, "keywords": "与人枪战", "gif_timestamp": "09:29"},
@@ -38,7 +38,7 @@ GAMES_CONFIG = {
     },
     "Detroit: Become Human": {
         "file_prefix": "Detroit:", # 截图显示为 Detroit:_evt_... (注意冒号)
-        "summary": "游戏内容总结：本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，并深入探讨了仿生人内部的分裂——例如，作为执法者的仿生人与其普通同类之间的对立。游戏中包含对犯罪现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
+        "summary": "本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，并深入探讨了仿生人内部的分裂——例如，作为执法者的仿生人与其普通同类之间的对立。游戏中包含对犯罪现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
         "video_duration_str": "01:00:06",
         "raw_events": [
             {"start_time": "02:20", "end_time": "09:29", "level": 1, "keywords": "案发现场", "gif_timestamp": "02:27"},
@@ -47,7 +47,7 @@ GAMES_CONFIG = {
     },
     "Hades": {
         "file_prefix": "Hades", # 截图显示为 Hades_evt_...
-        "summary": "游戏内容总结：快节奏的动作战斗是核心玩法，玩家在游戏中主要操控剑、矛、盾、弓等神话冷兵器与冥界怪物进行高频率的砍杀对抗。当敌人或玩家受伤时，画面会出现鲜红的血液喷溅特效和地面积血细节，但敌人死亡后通常会化为光点或烟雾迅速消散。",
+        "summary": "快节奏的动作战斗是核心玩法，玩家在游戏中主要操控剑、矛、盾、弓等神话冷兵器与冥界怪物进行高频率的砍杀对抗。当敌人或玩家受伤时，画面会出现鲜红的血液喷溅特效和地面积血细节，但敌人死亡后通常会化为光点或烟雾迅速消散。",
         "video_duration_str": "01:00:22",
         "raw_events": [
             {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "05:14"},
@@ -141,8 +141,6 @@ with st.container():
     df = pd.DataFrame(events)
 
     # ✅ 强制补齐三个等级（即使没有事件）
-    # 为了保证索引一致性，我们把这些 dummy rows 加在最后
-    # 注意：reset_index 确保索引 0, 1, 2... 对应 df 的行号
     for lvl in LEVEL_ORDER:
         if df.empty or lvl not in df["level"].values:
             df = pd.concat([
@@ -157,7 +155,6 @@ with st.container():
                 }])
             ])
     
-    # ⚠️ 关键步骤：重置索引，确保 Plotly 的 pointIndex 能对齐 DataFrame 的行
     df = df.reset_index(drop=True)
 
     fig = px.timeline(
@@ -167,7 +164,7 @@ with st.container():
         y="level",
         color="level",
         category_orders={"level": LEVEL_ORDER},
-        # 我们不再依赖这里传递 custom_data，因为不稳定
+        custom_data=["ID"], # ✅ 将 ID 注入 custom_data 供点击捕获
         color_discrete_map={
             "轻度": "#FDB462",
             "中度": "#FB6A4A",
@@ -198,18 +195,18 @@ with st.container():
 with st.container():
     st.subheader("🎬 事件动态预览")
 
-    # ✅ 修复逻辑：使用 pointIndex 替代 customdata
-    # 这样可以避免 KeyError，只要能点中，就能查到数据
-    
     selected_row = None
     
     try:
         if selected and selected.get("selection") and selected["selection"].get("points"):
-            # 获取点击点在图表数据中的索引 (Row ID)
-            point_index = selected["selection"]["points"][0].get("pointIndex")
-            
-            if point_index is not None and point_index < len(df):
-                selected_row = df.iloc[point_index]
+            # ✅ 修复核心：通过 customdata[0] 获取 ID
+            point_data = selected["selection"]["points"][0]
+            if "customdata" in point_data:
+                clicked_id = point_data["customdata"][0]
+                # 根据 ID 在数据框中过滤出行
+                matching_rows = df[df["ID"] == clicked_id]
+                if not matching_rows.empty:
+                    selected_row = matching_rows.iloc[0]
     except Exception as e:
         st.error(f"处理点击事件时发生错误: {e}")
 
@@ -232,7 +229,6 @@ with st.container():
             if os.path.exists(gif_path):
                 col1, col2 = st.columns([1.5, 1])
                 with col1:
-                    # 使用唯一的 key 确保图片切换时不闪烁或混淆
                     st.image(
                         gif_path,
                         use_container_width=True,
