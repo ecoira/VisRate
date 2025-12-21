@@ -78,7 +78,7 @@ with st.container():
     preload_html = ""
     for idx, e in enumerate(all_events):
         sec = time_str_to_seconds(e["gif_timestamp"])
-        url = f"gif_cache/{game_cfg['file_prefix']}_evt_{idx}_{sec}s.gif"
+        url = f"/app/static/gif_cache/{game_cfg['file_prefix']}_evt_{idx}_{sec}s.gif"
         preload_html += f'<link rel="preload" as="image" href="{url}">'
     
     # 插入隐藏的预加载标签
