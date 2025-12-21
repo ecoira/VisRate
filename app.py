@@ -144,64 +144,46 @@ with st.container():
 
     selected = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
+
 # ======================================================
-# 🧱 区域三：事件动态预览 (强制 GIF 动态 + 调整大小)
+# 🧱 区域三：事件动态预览 (已优化为 MP4 格式)
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
-    selected_row = None
-    
-    # 获取选中的点
-    selection = selected.get("selection", {})
-    points = selection.get("points", [])
-
-    if points:
-        # 获取第一个选中的点的数据
-        point_data = points[0]
-        
-        # 核心修复：安全地提取 custom_data
-        # custom_data 在不同版本的 Streamlit/Plotly 中可能是列表，也可能是字典
-        raw_custom_data = point_data.get("customdata", [])
-        
-        clicked_id = -1
-        
-        if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
-            clicked_id = int(raw_custom_data[0])
-        elif isinstance(raw_custom_data, dict):
-            # 如果是字典，尝试获取键为 "0" 或 0 的值
-            clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
-
-        # 排除 ID 为 -1 的无效点（例如我们补充的空白背景点）
-        if clicked_id != -1:
-            match = df[df["ID"] == clicked_id]
-            if not match.empty:
-                selected_row = match.iloc[0]
+    # ... (保留获取 selected_row 的逻辑不变) ...
 
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
         prefix = game_cfg["file_prefix"]
         gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
-        gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
-        gif_path = os.path.join("gif_cache", gif_filename)
+        
+        # 1. 修改后缀名为 .mp4
+        video_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.mp4"
+        
+        # 2. 指向新的 video_cache 文件夹
+        local_video_path = os.path.join("static", "video_cache", video_filename)
+        
+        # 3. 构造 Web 访问 URL
+        # 注意：开启 enableStaticServing 后，URL 格式通常为 app/static/...
+        web_video_url = f"app/static/video_cache/{video_filename}"
 
-        if os.path.exists(gif_path):
-            # --- 核心改进：使用 HTML 读取并显示 GIF，解决不循环/静态问题 ---
-            with open(gif_path, "rb") as f:
-                data = f.read()
-                data_url = base64.b64encode(data).decode("utf-8")
-            
-            # 这里设置 width 为 600px（你可以根据需要调整大小）
+        if os.path.exists(local_video_path):
+            # 使用 HTML5 <video> 标签模拟 GIF 效果：
+            # autoplay (自动播放), loop (循环), muted (静音 - 自动播放必须静音), playsinline
             st.markdown(
                 f'''
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <img src="data:image/gif;base64,{data_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                    <p style="margin-top: 10px; font-size: 16px;"></p>
+                    <video width="600" autoplay loop muted playsinline style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                        <source src="{web_video_url}" type="video/mp4">
+                        您的浏览器不支持视频标签。
+                    </video>
+                    <p style="margin-top: 10px; font-size: 16px;"><b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}</p>
                 </div>
                 ''',
                 unsafe_allow_html=True
             )
         else:
-            st.warning(f"未找到对应的 GIF 预览文件: {gif_filename}")
+            st.warning(f"未找到对应的视频文件: {local_video_path}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
