@@ -147,11 +147,24 @@ with st.container():
 # ======================================================
 # 🧱 区域三：事件动态预览 (强制 GIF 动态 + 调整大小)
 # ======================================================
+# ======================================================
+# 🧱 区域三：事件动态预览 (路径修正版)
+# ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
-    # ... (此处保持你之前的 selection 获取逻辑不变) ...
+    # 保持 selection 获取逻辑不变
+    points = selected.get("selection", {}).get("points", [])
+    if points:
+        point_data = points[0]
+        custom_data = point_data.get("customdata", [])
+        if custom_data:
+            clicked_id = int(custom_data[0])
+            if clicked_id != -1:
+                match = df[df["ID"] == clicked_id]
+                if not match.empty:
+                    selected_row = match.iloc[0]
 
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
@@ -160,19 +173,18 @@ with st.container():
         
         gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
         
-        # 🟢 修改点 1：Python 检查路径要加上 "static"
+        # 1. Python 后端检查路径（用于确认文件是否存在）
         local_gif_path = os.path.join("static", "gif_cache", gif_filename)
         
-        # 🟢 修改点 2：浏览器访问的 URL 路径
-        # Streamlit 开启静态服务后，static 文件夹映射到 /app/static/
-        web_gif_url = f"app/static/gif_cache/{gif_filename}"
+        # 2. 浏览器前端访问路径 (关键：必须以 / 开头)
+        web_gif_url = f"/app/static/gif_cache/{gif_filename}"
 
         if os.path.exists(local_gif_path):
-            # 🟢 修改点 3：直接使用 URL，不再使用 Base64 编码（解决加载慢的关键）
+            # 渲染图片
             st.markdown(
                 f'''
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <img src="{web_gif_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <img src="{web_gif_url}" width="500" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
                     <p style="margin-top: 10px; font-size: 16px;">
                         <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
                     </p>
@@ -180,8 +192,13 @@ with st.container():
                 ''',
                 unsafe_allow_html=True
             )
+            
+            # --- 临时调试代码：如果图片还是不显示，请取消下面这行的注释查看 URL ---
+            st.code(f"生成的图片URL: {web_gif_url}")
+            
         else:
-            # 这里的报错信息可以帮助你调试
-            st.error(f"❌ 未找到文件：{local_gif_path}")
+            # 如果 Python 找不到文件，说明文件名拼接逻辑或目录结构还是有问题
+            st.error(f"❌ 找不到文件：{local_gif_path}")
+            st.write("请检查该文件是否确实存在于 static/gif_cache/ 目录下。")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
