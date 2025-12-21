@@ -72,21 +72,6 @@ game_cfg = GAMES_CONFIG[selected_game]
 st.title(f"🎮 {selected_game} 暴力内容分析")
 
 # ======================================================
-# 🚀 核心改进：修正后的预加载逻辑
-# ======================================================
-with st.container():
-    all_events = game_cfg["raw_events"]
-    preload_html = ""
-    for idx, e in enumerate(all_events):
-        # 确保这里的 URL 结构与后面显示时完全一致
-        sec = time_str_to_seconds(e["gif_timestamp"])
-        url = f"/app/static/gif_cache/{game_cfg['file_prefix']}_evt_{idx}_{sec}s.gif"
-        # 使用 link rel="prefetch" 在浏览器空闲时下载
-        preload_html += f'<link rel="prefetch" href="{url}">'
-    
-    # 将预加载标签注入页面
-    st.components.v1.html(f'<html><head>{preload_html}</head><body></body></html>', height=0)
-# ======================================================
 # 🧱 区域一：游戏内容总结 (文字已放大)
 # ======================================================
 with st.container():
@@ -160,24 +145,34 @@ with st.container():
     selected = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
 # ======================================================
-# 🧱 区域三：事件动态预览 (放弃 Base64，改用静态 URL)
+# 🧱 区域三：事件动态预览 (强制 GIF 动态 + 调整大小)
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
+    
+    # 获取选中的点
     selection = selected.get("selection", {})
     points = selection.get("points", [])
 
     if points:
+        # 获取第一个选中的点的数据
         point_data = points[0]
+        
+        # 核心修复：安全地提取 custom_data
+        # custom_data 在不同版本的 Streamlit/Plotly 中可能是列表，也可能是字典
         raw_custom_data = point_data.get("customdata", [])
+        
         clicked_id = -1
+        
         if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
             clicked_id = int(raw_custom_data[0])
         elif isinstance(raw_custom_data, dict):
+            # 如果是字典，尝试获取键为 "0" 或 0 的值
             clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
 
+        # 排除 ID 为 -1 的无效点（例如我们补充的空白背景点）
         if clicked_id != -1:
             match = df[df["ID"] == clicked_id]
             if not match.empty:
@@ -188,26 +183,25 @@ with st.container():
         prefix = game_cfg["file_prefix"]
         gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
         gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
-        
-        # 🟢 修正点 1：Python 端检查路径需加上 "static" (根据你的截图结构)
-        local_gif_path = os.path.join("static", "gif_cache", gif_filename)
-        
-        # 🟢 修正点 2：Web 端 URL 必须与预加载的 URL 完全一致
-        web_gif_url = f"/app/static/gif_cache/{gif_filename}"
+        gif_path = os.path.join("gif_cache", gif_filename)
 
-        if os.path.exists(local_gif_path):
-            # 🟢 修正点 3：直接在 src 中填入 web_gif_url
-            # 这样浏览器会发现这个 URL 已经在缓存里了，从而瞬间显示
+        if os.path.exists(gif_path):
+            # --- 核心改进：使用 HTML 读取并显示 GIF，解决不循环/静态问题 ---
+            with open(gif_path, "rb") as f:
+                data = f.read()
+                data_url = base64.b64encode(data).decode("utf-8")
+            
+            # 这里设置 width 为 600px（你可以根据需要调整大小）
             st.markdown(
                 f'''
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <img src="{web_gif_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                    <p style="margin-top: 10px; font-size: 16px;"><b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}</p>
+                    <img src="data:image/gif;base64,{data_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <p style="margin-top: 10px; font-size: 16px;"></p>
                 </div>
                 ''',
                 unsafe_allow_html=True
             )
         else:
-            st.warning(f"未找到对应的 GIF 文件: {local_gif_path}")
+            st.warning(f"未找到对应的 GIF 预览文件: {gif_filename}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
