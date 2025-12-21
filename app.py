@@ -150,22 +150,38 @@ with st.container():
 # ======================================================
 # 🧱 区域三：事件动态预览 (路径修正版)
 # ======================================================
+# ======================================================
+# 🧱 区域三：事件动态预览 (增强容错 + 路径修正)
+# ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
-    # 保持 selection 获取逻辑不变
-    points = selected.get("selection", {}).get("points", [])
+    
+    # 1. 安全获取 selection 对象
+    selection = selected.get("selection", {})
+    points = selection.get("points", [])
+
     if points:
         point_data = points[0]
-        custom_data = point_data.get("customdata", [])
-        if custom_data:
-            clicked_id = int(custom_data[0])
-            if clicked_id != -1:
-                match = df[df["ID"] == clicked_id]
-                if not match.empty:
-                    selected_row = match.iloc[0]
+        # 2. 安全获取 customdata
+        raw_custom_data = point_data.get("customdata", [])
+        
+        clicked_id = -1
+        # 判断 raw_custom_data 是否为非空列表
+        if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
+            clicked_id = int(raw_custom_data[0])
+        # 兼容某些版本可能返回字典的情况
+        elif isinstance(raw_custom_data, dict):
+            clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
 
+        # 3. 只有点击了有效的事件方块才匹配数据
+        if clicked_id != -1:
+            match = df[df["ID"] == clicked_id]
+            if not match.empty:
+                selected_row = match.iloc[0]
+
+    # --- 显示逻辑 ---
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
         prefix = game_cfg["file_prefix"]
@@ -173,32 +189,29 @@ with st.container():
         
         gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
         
-        # 1. Python 后端检查路径（用于确认文件是否存在）
+        # 后端检查路径
         local_gif_path = os.path.join("static", "gif_cache", gif_filename)
         
-        # 2. 浏览器前端访问路径 (关键：必须以 / 开头)
+        # 前端访问路径 (必须加开头的 / )
         web_gif_url = f"/app/static/gif_cache/{gif_filename}"
 
         if os.path.exists(local_gif_path):
-            # 渲染图片
             st.markdown(
                 f'''
                 <div style="display: flex; flex-direction: column; align-items: center;">
                     <img src="{web_gif_url}" width="500" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                    <p style="margin-top: 10px; font-size: 16px;">
+                    <p style="margin-top: 15px; font-size: 18px;">
                         <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
                     </p>
                 </div>
                 ''',
                 unsafe_allow_html=True
             )
-            
-            # --- 临时调试代码：如果图片还是不显示，请取消下面这行的注释查看 URL ---
-            st.code(f"生成的图片URL: {web_gif_url}")
-            
         else:
-            # 如果 Python 找不到文件，说明文件名拼接逻辑或目录结构还是有问题
             st.error(f"❌ 找不到文件：{local_gif_path}")
-            st.write("请检查该文件是否确实存在于 static/gif_cache/ 目录下。")
+            # 辅助调试：列出目录下前3个文件看命名格式是否匹配
+            if os.path.exists("static/gif_cache"):
+                files = os.listdir("static/gif_cache")[:3]
+                st.write(f"检查 static/gif_cache/ 目录，现有文件如: {files}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
