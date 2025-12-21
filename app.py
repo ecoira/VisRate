@@ -153,7 +153,9 @@ with st.container():
         y="level",
         color="level",
         category_orders={"level": LEVEL_ORDER},
+        # 修改这里：同时增加 hover_data 确保数据绑定
         custom_data=["ID"],
+        hover_data={"ID": False, "level": True, "start": True, "end": True}, 
         color_discrete_map={
             "轻度": "#FDB462",
             "中度": "#FB6A4A",
@@ -174,70 +176,27 @@ with st.container():
 # ======================================================
 # 🧱 区域三：事件动态预览
 # ======================================================
-# with st.container():
-#     st.subheader("🎬 事件动态预览")
+with st.container():
+    st.subheader("🎬 事件动态预览")
 
-#     selected_row = None
-#     try:
-#         if selected and "selection" in selected and selected["selection"].get("points"):
-#             point_data = selected["selection"]["points"][0]
-#             if "customdata" in point_data:
-#                 clicked_id = point_data["customdata"][0]
-#                 if clicked_id != -1:
-#                     match = df[df["ID"] == clicked_id]
-#                     if not match.empty:
-#                         selected_row = match.iloc[0]
-#     except Exception as e:
-#         st.error(f"处理点击事件时发生错误: {e}")
-
-#     if selected_row is not None:
-#         evt_id = int(selected_row["ID"])
-#         prefix = game_cfg["file_prefix"]
-#         gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
-
-#         gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
-#         gif_path = os.path.join("gif_cache", gif_filename)
-
-#         if os.path.exists(gif_path):
-#             col1, col2 = st.columns([1.5, 1])
-#             with col1:
-#                 with open(gif_path, "rb") as f:
-#                     st.image(
-#                         f.read(),
-#                         format="gif",
-#                         use_container_width=True,
-#                         key=f"img_{prefix}_{evt_id}_{os.path.getmtime(gif_path)}"
-#                     )
-#             with col2:
-#                 st.markdown("### 事件详情")
-#                 st.markdown(f"**关键词**：{selected_row['keywords']}")
-#                 st.markdown(f"**暴力等级**：{selected_row['level']}")
-#                 st.markdown(
-#                     f"**发生时间**：{game_cfg['raw_events'][evt_id]['start_time']} - {game_cfg['raw_events'][evt_id]['end_time']}"
-#                 )
-#         else:
-#             st.warning("GIF 文件丢失")
-#             st.caption(f"路径: `{gif_path}`")
-#     else:
-#         st.info("💡 请点击上方时间轴中的【彩色方块】以查看对应动态预览")
-
-fig.update_layout(xaxis_tickformat='%H:%M:%S', height=400)
-selected_points = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
-
-# 3. 详情展示：仅显示 GIF [要求2]
-st.subheader("🎬 事件动态预览")
-if selected_points and selected_points["selection"]["points"]:
-    idx = selected_points["selection"]["points"][0]["point_index"]
-    evt = events[idx]
-    
-    # 路径匹配
-    game_prefix = selected_game.split(' ')[0]
-    gif_path = f"gif_cache/{game_prefix}_evt_{evt['ID']}_{evt['gif_s']}s.gif"
-
-    # 居中显示 GIF，不显示任何文字标签 [要求2]
-    if os.path.exists(gif_path):
-        st.image(gif_path, use_container_width=True)
-    else:
-        st.error(f"未找到 GIF: {gif_path}")
-else:
-    st.info("💡 请点击上方时间轴中的方块。")
+    selected_row = None
+    try:
+        # 1. 安全获取 points 列表
+        points = selected.get("selection", {}).get("points", [])
+        
+        if points:
+            point_data = points[0]
+            # 2. 安全获取 customdata 并检查是否为空
+            custom_data = point_data.get("customdata", [])
+            
+            if custom_data and len(custom_data) > 0:
+                clicked_id = custom_data[0]
+                
+                if clicked_id != -1:
+                    # 3. 确保在 df 中能找到该 ID
+                    match = df[df["ID"] == clicked_id]
+                    if not match.empty:
+                        selected_row = match.iloc[0]
+    except Exception as e:
+        # 这里可以保持静默或者打印更详细的错误供调试
+        pass
