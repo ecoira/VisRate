@@ -74,19 +74,18 @@ st.title(f"🎮 {selected_game} 暴力内容分析")
 # ======================================================
 # 🚀 核心改进：修正后的预加载逻辑
 # ======================================================
-# 在 st.title 之后插入
 with st.container():
     all_events = game_cfg["raw_events"]
     preload_html = ""
     for idx, e in enumerate(all_events):
+        # 确保这里的 URL 结构与后面显示时完全一致
         sec = time_str_to_seconds(e["gif_timestamp"])
-        # 必须与显示时的 URL 完全对齐
-        url = f"/app/static/gif_cache/{game_cfg['file_prefix']}_evt_{idx}_{sec}s.gif"
+        url = f"/static/gif_cache/{game_cfg['file_prefix']}_evt_{idx}_{sec}s.gif"
+        # 使用 link rel="prefetch" 在浏览器空闲时下载
         preload_html += f'<link rel="prefetch" href="{url}">'
     
-    # 注入到页面中
+    # 将预加载标签注入页面
     st.components.v1.html(f'<html><head>{preload_html}</head><body></body></html>', height=0)
-    
 # ======================================================
 # 🧱 区域一：游戏内容总结 (文字已放大)
 # ======================================================
@@ -167,17 +166,22 @@ with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
-    # (获取 selected_row 的逻辑保持不变，确保 clicked_id 提取正确)
     selection = selected.get("selection", {})
     points = selection.get("points", [])
+
     if points:
-        raw_custom_data = points[0].get("customdata", [])
-        if raw_custom_data and len(raw_custom_data) > 0:
+        point_data = points[0]
+        raw_custom_data = point_data.get("customdata", [])
+        clicked_id = -1
+        if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
             clicked_id = int(raw_custom_data[0])
-            if clicked_id != -1:
-                match = df[df["ID"] == clicked_id]
-                if not match.empty:
-                    selected_row = match.iloc[0]
+        elif isinstance(raw_custom_data, dict):
+            clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
+
+        if clicked_id != -1:
+            match = df[df["ID"] == clicked_id]
+            if not match.empty:
+                selected_row = match.iloc[0]
 
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
@@ -185,30 +189,25 @@ with st.container():
         gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
         gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
         
-        # 1. Python 后端检查路径：用于确认文件在 GitHub 仓库中存在
+        # 🟢 修正点 1：Python 端检查路径需加上 "static" (根据你的截图结构)
         local_gif_path = os.path.join("static", "gif_cache", gif_filename)
         
-        # 2. 浏览器前端 URL：这是预加载和显示公用的关键路径
-        # 注意：开头必须有斜杠 /
-        web_gif_url = f"/app/static/gif_cache/{gif_filename}"
+        # 🟢 修正点 2：Web 端 URL 必须与预加载的 URL 完全一致
+        web_gif_url = f"/static/gif_cache/{gif_filename}"
 
         if os.path.exists(local_gif_path):
-            # 直接使用 <img> 标签指向 URL，浏览器会自动从预加载的缓存中读取
+            # 🟢 修正点 3：直接在 src 中填入 web_gif_url
+            # 这样浏览器会发现这个 URL 已经在缓存里了，从而瞬间显示
             st.markdown(
                 f'''
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <img src="{web_gif_url}" width="500" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                    <p style="margin-top: 15px; font-size: 18px;">
-                        <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
-                    </p>
+                    <img src="{web_gif_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <p style="margin-top: 10px; font-size: 16px;"><b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}</p>
                 </div>
                 ''',
                 unsafe_allow_html=True
             )
         else:
-            # 如果进到这里，说明文件名拼错了
-            st.error(f"文件未找到：{local_gif_path}")
-            if os.path.exists("static/gif_cache"):
-                st.write(f"当前目录下文件有：{os.listdir('static/gif_cache')[:5]}")
+            st.warning(f"未找到对应的 GIF 文件: {local_gif_path}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
