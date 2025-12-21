@@ -36,7 +36,7 @@ GAMES_CONFIG = {
         ]
     },
     "Detroit: Become Human": {
-        "file_prefix": "Detroit:",
+        "file_prefix": "Detroit",
         "summary": "本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，并深入探讨了仿生人内部的分裂——例如，作为执法者的仿生人与其普通同类之间的对立。游戏中包含对犯罪现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
         "video_duration_str": "01:00:06",
         "raw_events": [
@@ -176,27 +176,49 @@ with st.container():
 # ======================================================
 # 🧱 区域三：事件动态预览
 # ======================================================
+# ======================================================
+# 🧱 区域三：事件动态预览（修改后的逻辑）
+# ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
     try:
-        # 1. 安全获取 points 列表
+        # 使用 .get() 安全获取 selection 数据
         points = selected.get("selection", {}).get("points", [])
         
         if points:
             point_data = points[0]
-            # 2. 安全获取 customdata 并检查是否为空
+            # 安全获取 customdata，防止 IndexError: 0
             custom_data = point_data.get("customdata", [])
             
-            if custom_data and len(custom_data) > 0:
-                clicked_id = custom_data[0]
+            if custom_data:
+                # 转换 ID 为整数以匹配 DataFrame
+                clicked_id = int(custom_data[0])
                 
                 if clicked_id != -1:
-                    # 3. 确保在 df 中能找到该 ID
+                    # 在 DataFrame 中寻找匹配行
                     match = df[df["ID"] == clicked_id]
                     if not match.empty:
                         selected_row = match.iloc[0]
     except Exception as e:
-        # 这里可以保持静默或者打印更详细的错误供调试
-        pass
+        st.error(f"处理点击事件时发生错误: {e}")
+
+    # 修改后的显示逻辑（在 if selected_row is not None: 内部）
+    if selected_row is not None:
+        evt_id = int(selected_row["ID"])
+        prefix = game_cfg["file_prefix"].replace(":", "") # 确保前缀无冒号
+        gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
+
+        # 构建文件名
+        gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
+        # 使用相对路径并进行检查
+        gif_path = os.path.join("gif_cache", gif_filename)
+
+        if os.path.exists(gif_path):
+            with open(gif_path, "rb") as f:
+                st.image(f.read(), format="gif", use_container_width=True)
+            st.markdown(f"**事件详情**：{selected_row['keywords']} | **等级**：{selected_row['level']}")
+        else:
+            st.warning(f"⚠️ 找不到文件: `{gif_filename}`")
+            st.info(f"请检查 `gif_cache` 目录下是否存在该文件。当前尝试路径: `{os.path.abspath(gif_path)}`")
