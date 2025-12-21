@@ -186,17 +186,15 @@ with st.container():
         gif_path = os.path.join("gif_cache", gif_filename)
 
         if os.path.exists(gif_path):
-            # --- 核心改进：使用 HTML 读取并显示 GIF，解决不循环/静态问题 ---
-            with open(gif_path, "rb") as f:
-                data = f.read()
-                data_url = base64.b64encode(data).decode("utf-8")
+            # 构建静态资源 URL
+            # 注意：在 Streamlit 中，static 文件夹映射为 /app/static/
+            gif_url = f"app/static/gif_cache/{gif_filename}"
             
-            # 这里设置 width 为 600px（你可以根据需要调整大小）
             st.markdown(
                 f'''
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <img src="data:image/gif;base64,{data_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                    <p style="margin-top: 10px; font-size: 16px;"><b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}</p>
+                    <img src="{gif_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <p style="margin-top: 10px; font-size: 16px;"></p>
                 </div>
                 ''',
                 unsafe_allow_html=True
