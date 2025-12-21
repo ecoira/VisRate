@@ -146,7 +146,7 @@ with st.container():
 
 
 # ======================================================
-# 🧱 区域三：事件动态预览 (修复 NameError + 强制刷新)
+# 🧱 区域三：事件动态预览 (兼容性修复版)
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
@@ -171,28 +171,28 @@ with st.container():
 
     # --- 渲染逻辑 ---
     if selected_row is not None:
-        # 1. 【必须步骤】先获取变量，构造文件名，解决 NameError
+        # 1. 定义所有变量，防止 NameError
         evt_id = int(selected_row["ID"])
         prefix = game_cfg["file_prefix"]
         ts_str = selected_row["gif_timestamp_str"]
         gif_seconds = time_str_to_seconds(ts_str)
         
-        # 2. 构造文件名
         video_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.mp4"
         local_video_path = os.path.join("static", "video_cache", video_filename)
 
         if os.path.exists(local_video_path):
-            # 3. 【核心改进】使用 st.video 并添加动态 key
-            # key=f"vid_{evt_id}" 确保每次切换 ID 时，Streamlit 都会销毁旧播放器并创建新的
+            # 2. 以二进制模式读取视频文件 (这样 Streamlit 处理最稳定)
+            with open(local_video_path, 'rb') as v_file:
+                video_bytes = v_file.read()
+            
+            # 3. 调用 st.video (移除低版本不支持的 autoplay/loop/muted 参数)
+            # 使用 key 确保切换事件时视频组件强制刷新
             st.video(
-                local_video_path, 
-                loop=True, 
-                autoplay=True, 
-                muted=True,
-                key=f"video_player_{evt_id}" 
+                video_bytes, 
+                format="video/mp4",
+                key=f"vid_player_{evt_id}" 
             )
             
-            # 使用 Markdown 让文字更好看点
             st.markdown(f"""
                 <p style="text-align: center; font-size: 18px; margin-top: 10px;">
                     <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
