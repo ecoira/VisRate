@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import os
+import base64
 
 # =============================
 # 页面配置
@@ -11,17 +12,10 @@ st.set_page_config(
     layout="wide"
 )
 
-LEVEL_MAP = {
-    1: "轻度",
-    2: "中度",
-    3: "重度"
-}
-
+LEVEL_MAP = {1: "轻度", 2: "中度", 3: "重度"}
 LEVEL_ORDER = ["轻度", "中度", "重度"]
 
-# =============================
-# 游戏配置
-# =============================
+# (GAMES_CONFIG 部分保持不变...)
 GAMES_CONFIG = {
     "Red Dead Redemption 2": {
         "file_prefix": "Red",
@@ -59,9 +53,6 @@ GAMES_CONFIG = {
     }
 }
 
-# =============================
-# 工具函数：时间字符串转秒
-# =============================
 def time_str_to_seconds(t: str) -> int:
     parts = t.split(":")
     if len(parts) == 2:
@@ -75,20 +66,13 @@ def time_str_to_seconds(t: str) -> int:
 # =============================
 # 选择游戏
 # =============================
-selected_game = st.selectbox(
-    "选择游戏",
-    list(GAMES_CONFIG.keys())
-)
-
+selected_game = st.selectbox("选择游戏", list(GAMES_CONFIG.keys()))
 game_cfg = GAMES_CONFIG[selected_game]
 
-# =============================
-# 🔥 动态标题
-# =============================
 st.title(f"🎮 {selected_game} 暴力内容分析")
 
 # ======================================================
-# 🧱 区域一：游戏内容总结
+# 🧱 区域一：游戏内容总结 (文字已放大)
 # ======================================================
 with st.container():
     st.subheader("📄 游戏内容总结")
@@ -96,10 +80,12 @@ with st.container():
         f"""
         <div style="
             background-color:#f5f7fa;
-            padding:16px;
+            padding:20px;
             border-radius:8px;
-            line-height:1.7;
-            font-size:15px;
+            line-height:1.8;
+            font-size:20px; /* 这里从 15px 改到了 20px */
+            font-weight: 400;
+            color: #2c3e50;
         ">
         {game_cfg["summary"]}
         </div>
@@ -108,7 +94,7 @@ with st.container():
     )
 
 # ======================================================
-# 🧱 区域二：暴力程度时间轴
+# 🧱 区域二：暴力程度时间轴 (坐标轴字体已放大)
 # ======================================================
 with st.container():
     st.subheader("📊 暴力程度时间轴")
@@ -130,97 +116,76 @@ with st.container():
 
     df = pd.DataFrame(events)
 
+    # 补充空数据确保 y 轴完整
     for lvl in LEVEL_ORDER:
         if df.empty or lvl not in df["level"].values:
-            df = pd.concat([
-                df,
-                pd.DataFrame([{
-                    "ID": -1,
-                    "start": base_time,
-                    "end": base_time + pd.Timedelta(seconds=0.1),
-                    "level": lvl,
-                    "keywords": "无事件",
-                    "gif_timestamp_str": ""
-                }])
-            ])
+            df = pd.concat([df, pd.DataFrame([{"ID": -1, "start": base_time, "end": base_time + pd.Timedelta(seconds=0.1), "level": lvl, "keywords": "无事件", "gif_timestamp_str": ""}])])
 
     df = df.reset_index(drop=True)
 
     fig = px.timeline(
-        df,
-        x_start="start",
-        x_end="end",
-        y="level",
-        color="level",
+        df, x_start="start", x_end="end", y="level", color="level",
         category_orders={"level": LEVEL_ORDER},
-        # 修改这里：同时增加 hover_data 确保数据绑定
         custom_data=["ID"],
         hover_data={"ID": False, "level": True, "start": True, "end": True}, 
-        color_discrete_map={
-            "轻度": "#FDB462",
-            "中度": "#FB6A4A",
-            "重度": "#CB181D"
-        },
+        color_discrete_map={"轻度": "#FDB462", "中度": "#FB6A4A", "重度": "#CB181D"},
         range_x=[base_time, end_video_time]
     )
 
     fig.update_layout(
-        height=260,
+        height=300,
         margin=dict(l=20, r=20, t=10, b=20),
         showlegend=True,
-        xaxis=dict(tickformat="%H:%M:%S", title="视频时间")
+        xaxis=dict(tickformat="%H:%M:%S", title="视频时间", tickfont=dict(size=14)),
+        # 放大 y 轴（轻度、中度、重度）的字体
+        yaxis=dict(title=None, tickfont=dict(size=18, color="black")),
+        legend=dict(font=dict(size=14))
     )
 
     selected = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
 # ======================================================
-# 🧱 区域三：事件动态预览
-# ======================================================
-# ======================================================
-# 🧱 区域三：事件动态预览（修改后的逻辑）
+# 🧱 区域三：事件动态预览 (强制 GIF 动态 + 调整大小)
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
-    try:
-        # 1. 这种写法更兼容新版 Streamlit
-        points = selected.get("selection", {}).get("points", [])
-        
-        if points:
-            point_data = points[0]
-            # 2. 兼容处理：有些版本 customdata 是列表，有些是字典
-            custom_data = point_data.get("customdata", [])
-            
-            if custom_data:
-                # 尝试获取第一个值，无论 custom_data 是列表还是字典
-                clicked_id = int(custom_data[0]) if isinstance(custom_data, list) else int(custom_data.get('0', -1))
-                
-                if clicked_id != -1:
-                    match = df[df["ID"] == clicked_id]
-                    if not match.empty:
-                        selected_row = match.iloc[0]
-    except Exception as e:
-        # 这里的 e 就是你看到的 "0"，因为 KeyError(0) 的字符串表示就是 0
-        st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
+    points = selected.get("selection", {}).get("points", [])
+    if points:
+        point_data = points[0]
+        custom_data = point_data.get("customdata", [])
+        if custom_data:
+            clicked_id = int(custom_data[0])
+            if clicked_id != -1:
+                match = df[df["ID"] == clicked_id]
+                if not match.empty:
+                    selected_row = match.iloc[0]
 
-    # 修改后的显示逻辑（在 if selected_row is not None: 内部）
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
         prefix = game_cfg["file_prefix"]
         gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
-
-        # 构建文件名
         gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
-        # 使用相对路径并进行检查
         gif_path = os.path.join("gif_cache", gif_filename)
 
         if os.path.exists(gif_path):
-            # 直接使用路径，Streamlit 会自动处理读取
-            st.image(gif_path, caption=f"正在播放：{gif_filename}", use_container_width=True)
-            st.markdown(f"**事件详情**：{selected_row['keywords']} | **等级**：{selected_row['level']}")
+            # --- 核心改进：使用 HTML 读取并显示 GIF，解决不循环/静态问题 ---
+            with open(gif_path, "rb") as f:
+                data = f.read()
+                data_url = base64.b64encode(data).decode("utf-8")
+            
+            # 这里设置 width 为 600px（你可以根据需要调整大小）
+            st.markdown(
+                f'''
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <img src="data:image/gif;base64,{data_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <p style="margin-top: 10px; font-size: 16px;"><b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}</p>
+                </div>
+                ''',
+                unsafe_allow_html=True
+            )
         else:
-            # 如果还是找不到，输出实际尝试的路径，方便你核对
-            st.error(f"❌ 找不到 GIF 文件")
-            st.code(f"预期路径: {gif_path}\n当前绝对路径: {os.path.abspath(gif_path)}")
-            st.write("当前 gif_cache 目录下的文件有：", os.listdir("gif_cache"))
+            st.warning(f"未找到对应的 GIF 预览文件: {gif_filename}")
+    else:
+        st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
