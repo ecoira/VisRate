@@ -4,7 +4,7 @@ import plotly.express as px
 import os
 
 # =============================
-# 基础配置
+# 页面配置
 # =============================
 st.set_page_config(
     page_title="暴力内容分析系统",
@@ -19,7 +19,7 @@ LEVEL_MAP = {
 
 LEVEL_ORDER = ["轻度", "中度", "重度"]
 
-# --- 数据配置 (同步自 test.py) ---
+
 GAMES_CONFIG = {
     "Red Dead Redemption 2": {
         "video_path": "video/redemption.mp4", # 请修改为真实路径
@@ -57,15 +57,35 @@ GAMES_CONFIG = {
     }
 }
 
-# =============================
-# 页面标题
-# =============================
-st.title("🎮 Red Dead Redemption 2 暴力内容分析")
 
+# =============================
+# 工具函数：时间字符串转秒
+# =============================
+def time_str_to_seconds(t: str) -> int:
+    parts = t.split(":")
+    if len(parts) == 2:      # MM:SS
+        m, s = parts
+        return int(m) * 60 + int(s)
+    elif len(parts) == 3:    # HH:MM:SS
+        h, m, s = parts
+        return int(h) * 3600 + int(m) * 60 + int(s)
+    return 0
+
+
+# =============================
+# 选择游戏
+# =============================
 selected_game = st.selectbox(
     "选择游戏",
     list(GAMES_CONFIG.keys())
 )
+
+game_cfg = GAMES_CONFIG[selected_game]
+
+# =============================
+# 🔥 动态标题（不再写死）
+# =============================
+st.title(f"🎮 {selected_game} 暴力内容分析")
 
 # ======================================================
 # 🧱 区域一：游戏内容总结
@@ -82,32 +102,36 @@ with st.container():
             line-height:1.7;
             font-size:15px;
         ">
-        {GAMES_CONFIG[selected_game]["summary"]}
+        {game_cfg["summary"]}
         </div>
         """,
         unsafe_allow_html=True
     )
 
 # ======================================================
-# 🧱 区域二：暴力程度时间轴（始终显示 3 个等级）
+# 🧱 区域二：暴力程度时间轴
 # ======================================================
 with st.container():
     st.subheader("📊 暴力程度时间轴")
 
     events = []
-    for idx, e in enumerate(GAMES_CONFIG[selected_game]["raw_events"]):
+
+    for idx, e in enumerate(game_cfg["raw_events"]):
+        start_s = time_str_to_seconds(e["start_time"])
+        end_s = time_str_to_seconds(e["end_time"])
+
         events.append({
             "ID": idx,
-            "start": e["start_s"],
-            "end": e["end_s"],
+            "start": start_s,
+            "end": end_s,
             "level": LEVEL_MAP[e["level"]],
             "keywords": e["keywords"],
-            "gif_s": e["gif_s"]
+            "gif_ts": e["gif_timestamp"]
         })
 
     df = pd.DataFrame(events)
 
-    # 🔴 核心修复：补齐缺失的等级（防止误导）
+    # ✅ 强制补齐三个等级（即使没有事件）
     for lvl in LEVEL_ORDER:
         if df.empty or lvl not in df["level"].values:
             df = pd.concat([
@@ -115,10 +139,10 @@ with st.container():
                 pd.DataFrame([{
                     "ID": -1,
                     "start": 0,
-                    "end": 0.1,
+                    "end": 1,
                     "level": lvl,
                     "keywords": "无事件",
-                    "gif_s": -1
+                    "gif_ts": ""
                 }])
             ])
 
@@ -150,34 +174,35 @@ with st.container():
     )
 
 # ======================================================
-# 🧱 区域三：事件动态预览（GIF 可切换 + 真·动态）
+# 🧱 区域三：事件动态预览
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
 
     if selected and selected["selection"]["points"]:
-        point = selected["selection"]["points"][0]
-        evt_id = point["customdata"][0]
+        evt_id = selected["selection"]["points"][0]["customdata"][0]
 
         if evt_id == -1:
             st.info("该暴力等级下未检测到具体事件，但已完成检测与分类。")
         else:
             evt = df[df["ID"] == evt_id].iloc[0]
 
-            gif_path = f"gif_cache/RDR2_evt_{evt_id}_{int(evt['gif_s'])}s.gif"
+            game_prefix = selected_game.replace(" ", "_").replace(":", "")
+            gif_path = f"gif_cache/{game_prefix}_evt_{evt_id}_{evt['gif_ts'].replace(':','')}.gif"
 
             if os.path.exists(gif_path):
-                # ✅ 核心修复：使用唯一 key，强制刷新 GIF
+                # ✅ 关键：唯一 key，保证 GIF 可切换 & 动态
                 st.image(
                     gif_path,
                     use_container_width=True,
-                    key=f"gif_evt_{evt_id}_{evt['gif_s']}"
+                    key=f"{game_prefix}_{evt_id}_{evt['gif_ts']}"
                 )
 
                 st.markdown(
                     f"""
                     **关键词**：{evt['keywords']}  
-                    **时间段**：{int(evt['start'])}s – {int(evt['end'])}s  
+                    **时间段**：{game_cfg["raw_events"][evt_id]["start_time"]}
+                    – {game_cfg["raw_events"][evt_id]["end_time"]}  
                     **暴力等级**：{evt['level']}
                     """
                 )
