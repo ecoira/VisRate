@@ -151,55 +151,37 @@ with st.container():
     st.subheader("🎬 事件动态预览")
 
     selected_row = None
-    
-    # 获取选中的点
-    selection = selected.get("selection", {})
-    points = selection.get("points", [])
-
-    if points:
-        # 获取第一个选中的点的数据
-        point_data = points[0]
-        
-        # 核心修复：安全地提取 custom_data
-        # custom_data 在不同版本的 Streamlit/Plotly 中可能是列表，也可能是字典
-        raw_custom_data = point_data.get("customdata", [])
-        
-        clicked_id = -1
-        
-        if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
-            clicked_id = int(raw_custom_data[0])
-        elif isinstance(raw_custom_data, dict):
-            # 如果是字典，尝试获取键为 "0" 或 0 的值
-            clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
-
-        # 排除 ID 为 -1 的无效点（例如我们补充的空白背景点）
-        if clicked_id != -1:
-            match = df[df["ID"] == clicked_id]
-            if not match.empty:
-                selected_row = match.iloc[0]
+    # ... (此处保持你之前的 selection 获取逻辑不变) ...
 
     if selected_row is not None:
         evt_id = int(selected_row["ID"])
         prefix = game_cfg["file_prefix"]
         gif_seconds = time_str_to_seconds(selected_row["gif_timestamp_str"])
+        
         gif_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.gif"
-        gif_path = os.path.join("gif_cache", gif_filename)
+        
+        # 🟢 修改点 1：Python 检查路径要加上 "static"
+        local_gif_path = os.path.join("static", "gif_cache", gif_filename)
+        
+        # 🟢 修改点 2：浏览器访问的 URL 路径
+        # Streamlit 开启静态服务后，static 文件夹映射到 /app/static/
+        web_gif_url = f"app/static/gif_cache/{gif_filename}"
 
-        if os.path.exists(gif_path):
-            # 构建静态资源 URL
-            # 注意：在 Streamlit 中，static 文件夹映射为 /app/static/
-            gif_url = f"app/static/gif_cache/{gif_filename}"
-            
+        if os.path.exists(local_gif_path):
+            # 🟢 修改点 3：直接使用 URL，不再使用 Base64 编码（解决加载慢的关键）
             st.markdown(
                 f'''
                 <div style="display: flex; flex-direction: column; align-items: center;">
-                    <img src="{gif_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                    <p style="margin-top: 10px; font-size: 16px;"></p>
+                    <img src="{web_gif_url}" width="600" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                    <p style="margin-top: 10px; font-size: 16px;">
+                        <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
+                    </p>
                 </div>
                 ''',
                 unsafe_allow_html=True
             )
         else:
-            st.warning(f"未找到对应的 GIF 预览文件: {gif_filename}")
+            # 这里的报错信息可以帮助你调试
+            st.error(f"❌ 未找到文件：{local_gif_path}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
