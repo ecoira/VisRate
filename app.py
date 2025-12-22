@@ -87,12 +87,17 @@ def show_system_1():
     selected_game = st.selectbox("选择游戏", game_list, key="s1_game")
     game_cfg = GAMES_DATA[selected_game]
 
-    # --- 关键逻辑修复：在渲染 fig 之前，先行检查上一轮的点击状态 ---
-    # 如果用户点击了图表，Streamlit 会重跑脚本，此时我们可以从 session_state 中直接拿到点击数据
-    prev_selection = st.session_state.get("timeline_chart", {}).get("selection", {}).get("points", [])
-    if prev_selection:
-        # 只要检测到有效点击，立即在当前运行周期关闭引导标记
+    # --- 核心修复逻辑：在所有组件渲染前获取点击数据 ---
+    # 直接从 session_state 缓存中读取，这样即使图表刷新，点击数据也不会丢失
+    selection_state = st.session_state.get("timeline_chart", {})
+    points = selection_state.get("selection", {}).get("points", [])
+    
+    clicked_info = None
+    if points:
+        # 只要有点选动作，立即关闭引导
         st.session_state.guide_active = False
+        # 提取点击的 ID 和 时间戳字符串
+        clicked_info = points[0].get("customdata")
 
     # 2. 数据准备
     st.subheader("📄 游戏内容总结")
@@ -129,18 +134,25 @@ def show_system_1():
         range_x=[base_time, end_video_time]
     )
 
-    # --- 渲染逻辑：如果引导未关闭，则添加气泡 ---
+    # --- 引导 UI：移到方块下方 (ay 正值) ---
     if selected_game == game_list[0] and st.session_state.guide_active:
         target_row = df.iloc[0]
         fig.add_annotation(
             x=target_row['center'],
             y=target_row['level'],
             text="✨ 点击查看 3s 事件视频",
-            showarrow=True, arrowhead=3, arrowsize=1.2, arrowwidth=2,
-            ax=0, ay=-55,
+            showarrow=True, 
+            arrowhead=3, 
+            arrowsize=1.2, 
+            arrowwidth=2,
+            ax=0, 
+            ay=55,  # 设置为正值，使引导气泡出现在方块下方
             font=dict(size=15, color="#333"),
-            bgcolor="#FFF9C4", bordercolor="#FBC02D",
-            borderwidth=2, borderpad=8, opacity=0.95
+            bgcolor="#FFF9C4", 
+            bordercolor="#FBC02D",
+            borderwidth=2, 
+            borderpad=8, 
+            opacity=0.95
         )
 
     fig.update_layout(
@@ -150,27 +162,23 @@ def show_system_1():
         yaxis=dict(title=None, tickfont=dict(size=14))
     )
     
-    # 渲染图表并绑定 key
-    event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="timeline_chart")
+    # 渲染图表（必须保留 key="timeline_chart"）
+    st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="timeline_chart")
 
-    # 4. 视频显示逻辑（直接从 event_data 获取，确保同步）
+    # 4. 视频显示逻辑（使用在代码开头截获的点击信息）
     st.subheader("🎬 事件动态预览")
-    current_points = event_data.get("selection", {}).get("points", [])
     
-    if current_points:
-        point = current_points[0]
-        custom_data = point.get("customdata", [])
-        if custom_data and custom_data[0] != -1:
-            clicked_id = custom_data[0]
-            ts_str = custom_data[1]
-            prefix = game_cfg["prefix"]
-            vid_path = os.path.join("static", "video_cache", f"{prefix}_evt_{clicked_id}_{time_str_to_seconds(ts_str)}s.mp4")
-            
-            if os.path.exists(vid_path):
-                # 强制重新渲染视频组件
-                st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
-            else:
-                st.error(f"找不到视频文件: {vid_path}")
+    if clicked_info and clicked_info[0] != -1:
+        clicked_id = clicked_info[0]
+        ts_str = clicked_info[1]
+        prefix = game_cfg["prefix"]
+        vid_path = os.path.join("static", "video_cache", f"{prefix}_evt_{clicked_id}_{time_str_to_seconds(ts_str)}s.mp4")
+        
+        if os.path.exists(vid_path):
+            # 这里的视频会随着第一次点击立即渲染
+            st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
+        else:
+            st.error(f"找不到视频文件: {vid_path}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
 
