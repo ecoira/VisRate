@@ -74,7 +74,7 @@ GAMES_DATA = {
 # =============================
 
 def show_system_1():
-    # 1. 初始化引导状态：0 表示显示引导，1 表示引导已结束
+    # 1. 状态初始化
     if 'guide_active' not in st.session_state:
         st.session_state.guide_active = True
 
@@ -87,14 +87,12 @@ def show_system_1():
     selected_game = st.selectbox("选择游戏", game_list, key="s1_game")
     game_cfg = GAMES_DATA[selected_game]
 
-    # --- 逻辑核心：检测是否有点击行为，如果有，则关闭引导 ---
-    # 检查图表的上一轮交互状态
-    current_selection = st.session_state.get("timeline_chart", {}).get("selection", {}).get("points", [])
-    if current_selection:
-        # 只要用户点击了有效方块（ID不为-1），引导状态就设为 False
-        clicked_id = current_selection[0].get("customdata", [-1])[0]
-        if clicked_id != -1:
-            st.session_state.guide_active = False
+    # --- 关键逻辑修复：在渲染 fig 之前，先行检查上一轮的点击状态 ---
+    # 如果用户点击了图表，Streamlit 会重跑脚本，此时我们可以从 session_state 中直接拿到点击数据
+    prev_selection = st.session_state.get("timeline_chart", {}).get("selection", {}).get("points", [])
+    if prev_selection:
+        # 只要检测到有效点击，立即在当前运行周期关闭引导标记
+        st.session_state.guide_active = False
 
     # 2. 数据准备
     st.subheader("📄 游戏内容总结")
@@ -112,18 +110,17 @@ def show_system_1():
             "ID": idx,
             "start": start_ts,
             "end": end_ts,
-            "center": start_ts + (end_ts - start_ts) / 2, # 指向方块中心
+            "center": start_ts + (end_ts - start_ts) / 2,
             "level": LEVEL_MAP[e["level"]],
             "gif_timestamp_str": e["gif_timestamp"]
         })
     
     df = pd.DataFrame(events)
-    # 补充空轴
     for lvl in LEVEL_ORDER:
         if lvl not in df["level"].values:
             df = pd.concat([df, pd.DataFrame([{"ID": -1, "start": base_time, "end": base_time, "level": lvl}])])
 
-    # 3. 绘制时间轴
+    # 3. 构造图表
     fig = px.timeline(
         df, x_start="start", x_end="end", y="level", color="level",
         category_orders={"level": LEVEL_ORDER},
@@ -132,25 +129,18 @@ def show_system_1():
         range_x=[base_time, end_video_time]
     )
 
-    # --- 添加单一引导：仅在第一款游戏且 guide_active 为 True 时显示 ---
+    # --- 渲染逻辑：如果引导未关闭，则添加气泡 ---
     if selected_game == game_list[0] and st.session_state.guide_active:
-        target_row = df.iloc[0] # 默认指向第一个事件
+        target_row = df.iloc[0]
         fig.add_annotation(
             x=target_row['center'],
             y=target_row['level'],
             text="✨ 点击查看 3s 事件视频",
-            showarrow=True,
-            arrowhead=3,
-            arrowsize=1.2,
-            arrowwidth=2,
-            arrowcolor="#444",
+            showarrow=True, arrowhead=3, arrowsize=1.2, arrowwidth=2,
             ax=0, ay=-55,
             font=dict(size=15, color="#333"),
-            bgcolor="#FFF9C4",
-            bordercolor="#FBC02D",
-            borderwidth=2,
-            borderpad=8,
-            opacity=0.95
+            bgcolor="#FFF9C4", bordercolor="#FBC02D",
+            borderwidth=2, borderpad=8, opacity=0.95
         )
 
     fig.update_layout(
@@ -160,15 +150,15 @@ def show_system_1():
         yaxis=dict(title=None, tickfont=dict(size=14))
     )
     
-    # 使用 key="timeline_chart" 来捕获交互
+    # 渲染图表并绑定 key
     event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="timeline_chart")
 
-    # 4. 视频渲染区域
+    # 4. 视频显示逻辑（直接从 event_data 获取，确保同步）
     st.subheader("🎬 事件动态预览")
-    points = event_data.get("selection", {}).get("points", [])
+    current_points = event_data.get("selection", {}).get("points", [])
     
-    if points:
-        point = points[0]
+    if current_points:
+        point = current_points[0]
         custom_data = point.get("customdata", [])
         if custom_data and custom_data[0] != -1:
             clicked_id = custom_data[0]
@@ -177,6 +167,7 @@ def show_system_1():
             vid_path = os.path.join("static", "video_cache", f"{prefix}_evt_{clicked_id}_{time_str_to_seconds(ts_str)}s.mp4")
             
             if os.path.exists(vid_path):
+                # 强制重新渲染视频组件
                 st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
             else:
                 st.error(f"找不到视频文件: {vid_path}")
