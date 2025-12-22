@@ -13,14 +13,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-def get_video_base64(file_path):
-    """将视频转换为Base64以解决Streamlit播放刷新问题"""
-    if not os.path.exists(file_path):
-        return None
-    with open(file_path, "rb") as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
-
 def time_str_to_seconds(t: str) -> int:
     parts = t.split(":")
     if len(parts) == 2:
@@ -112,27 +104,33 @@ def show_system_1():
     fig = px.timeline(
         df, x_start="start", x_end="end", y="level", color="level",
         category_orders={"level": LEVEL_ORDER},
-        custom_data=["ID"],
+        custom_data=["ID", "gif_timestamp_str"],
         color_discrete_map={"轻度": "#FDB462", "中度": "#FB6A4A", "重度": "#CB181D"},
         range_x=[base_time, end_video_time]
     )
     fig.update_layout(height=200, margin=dict(l=20, r=20, t=10, b=20), xaxis=dict(tickformat="%H:%M:%S", title="视频时间"), yaxis=dict(title=None))
     
-    selected_point = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+    # 交互处理：使用更安全的访问方式
+    event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
     st.subheader("🎬 事件动态预览")
-    selection = selected_point.get("selection", {}).get("points", [])
-    if selection:
-        clicked_id = selection[0].get("customdata", [-1])[0]
-        if clicked_id != -1:
-            row = df[df["ID"] == clicked_id].iloc[0]
+    
+    # 修复 KeyError：增加结构校验
+    points = event_data.get("selection", {}).get("points", [])
+    if points:
+        point = points[0]
+        # 从 customdata 提取 ID
+        custom_data = point.get("customdata", [])
+        if custom_data and custom_data[0] != -1:
+            clicked_id = custom_data[0]
+            ts_str = custom_data[1]
             prefix = game_cfg["prefix"]
-            ts_str = row["gif_timestamp_str"]
+            
             vid_path = os.path.join("static", "video_cache", f"{prefix}_evt_{clicked_id}_{time_str_to_seconds(ts_str)}s.mp4")
             
-            v_base64 = get_video_base64(vid_path)
-            if v_base64:
-                st.markdown(f'<video width="900" autoplay loop muted playsinline><source src="data:video/mp4;base64,{v_base64}" type="video/mp4"></video>', unsafe_allow_html=True)
+            if os.path.exists(vid_path):
+                # 优化：直接使用 st.video 加载路径，不走 Base64，大幅提升速度
+                st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
             else:
                 st.error(f"找不到视频文件: {vid_path}")
     else:
@@ -143,22 +141,24 @@ def show_system_2():
     selected_game = st.selectbox("选择游戏", list(GAMES_DATA.keys()), key="s2_game")
     data = GAMES_DATA[selected_game]
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.subheader("📋 评级详情")
-        st.markdown(f"""
-        **年龄评级:** <span style="font-size:24px; color:#e74c3c;">{data['esrb_level']}</span>  
-        **关键提示词:** {data['keywords']}  
-        **详细描述:** <div style="background-color:#fdfefe; padding:15px; border-left:5px solid #3498db; font-size:18px;">{data['summary']}</div>
-        """, unsafe_allow_html=True)
+    # 修改为上下布局
+    st.subheader("📋 评级详情")
+    st.markdown(f"""
+    <div style="background-color:#f8f9fa; padding:20px; border-radius:10px; border-left:8px solid #e74c3c; margin-bottom:20px;">
+        <p style="font-size:20px;"><strong>年龄评级:</strong> <span style="font-size:28px; color:#e74c3c;">{data['esrb_level']}</span></p>
+        <p style="font-size:18px;"><strong>关键提示词:</strong> {data['keywords']}</p>
+        <hr>
+        <p style="font-size:18px; line-height:1.6;">{data['summary']}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    with col2:
-        st.subheader("🖼️ 评级示意图")
-        img_path = os.path.join("static", "images", f"{data['prefix']}_cover.png")
-        if os.path.exists(img_path):
-            st.image(img_path, caption=f"{selected_game} 评级参考图", use_container_width=True)
-        else:
-            st.warning(f"图片未找到: {img_path}")
+    st.subheader("🖼️ 评级示意图")
+    img_path = os.path.join("static", "images", f"{data['prefix']}_cover.png")
+    if os.path.exists(img_path):
+        # 控制图片宽度，防止在上下布局中显得过大
+        st.image(img_path, caption=f"{selected_game} 评级参考图", width=600)
+    else:
+        st.warning(f"图片未找到: {img_path}")
 
 def show_system_3():
     st.header("🎥 系统三：Common Sense Media 暴力内容总结")
@@ -166,13 +166,15 @@ def show_system_3():
     data = GAMES_DATA[selected_game]
 
     st.subheader("📄 暴力行为描述")
-    st.markdown(f'<div style="font-size:22px; padding:10px; color:#2c3e50;">{data["summary"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:22px; padding:20px; background-color:#fff4f4; border-radius:10px; color:#2c3e50; margin-bottom:20px;">{data["summary"]}</div>', unsafe_allow_html=True)
 
     st.subheader("📽️ 暴力内容典型片段演示")
     vid_path = os.path.join("static", "videos", f"{data['prefix']}_demo.mp4")
-    v_base64 = get_video_base64(vid_path)
-    if v_base64:
-        st.markdown(f'<video width="100%" controls autoplay loop muted><source src="data:video/mp4;base64,{v_base64}" type="video/mp4"></video>', unsafe_allow_html=True)
+    
+    # 优化点：使用 st.video 直接加载物理路径。
+    # Base64 转换大视频会导致浏览器卡顿且切换缓慢，st.video 支持流式传输，即点即播。
+    if os.path.exists(vid_path):
+        st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
     else:
         st.warning(f"视频演示文件未找到: {vid_path}")
 
@@ -180,41 +182,35 @@ def show_system_3():
 # 4. 页面导航逻辑
 # =============================
 
-# 初始化页面状态
 if 'page' not in st.session_state:
     st.session_state.page = 'home'
 
 if st.session_state.page == 'home':
-    # --- 欢迎页面渲染 ---
     st.write("# ")
     st.markdown("<h1 style='text-align: center;'>欢迎您参加关于“电子游戏评级信息呈现方式”的学术研究项目</h1>", unsafe_allow_html=True)
     st.write("---")
     
-    # 居中对齐容器
     _, center_col, _ = st.columns([1, 2, 1])
     
     with center_col:
         st.write("### 请选择下方其中一个系统进行体验：")
-        # 修改为竖向排列
         if st.button("🚀 系统 1：暴力时间轴分析", use_container_width=True):
             st.session_state.page = "系统 1"
             st.rerun()
         
-        st.write("") # 增加间距
+        st.write("") 
         if st.button("🖼️ 系统 2：静态信息展示", use_container_width=True):
             st.session_state.page = "系统 2"
             st.rerun()
             
-        st.write("") # 增加间距
+        st.write("") 
         if st.button("🎥 系统 3：动态语义展示", use_container_width=True):
             st.session_state.page = "系统 3"
             st.rerun()
 
 else:
-    # --- 进入系统后的侧边栏 ---
     with st.sidebar:
         st.title("🚀 系统切换")
-        # 修复逻辑点：确保选项字符串与下方 if 判断一致
         nav_selection = st.radio(
             "前往：",
             ["系统 1", "系统 2", "系统 3"],
@@ -229,8 +225,6 @@ else:
             st.session_state.page = 'home'
             st.rerun()
 
-    # --- 页面内容路由渲染 ---
-    # 修复逻辑点：移除多余的后缀，确保与 session_state.page 字符串完全匹配
     if st.session_state.page == "系统 1":
         show_system_1()
     elif st.session_state.page == "系统 2":
