@@ -59,8 +59,12 @@ GAMES_DATA = {
         "summary": "战斗是这款动作游戏的核心。你会看到一些血溅效果，当主角“死亡”时，你可能会看到他被尖刺刺穿，或者脸朝下倒在一滩血泊中。战斗中可以使用各种武器及魔法攻击。",
         "video_duration_str": "01:00:22",
         "raw_events": [
-            {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "战斗场景", "gif_timestamp": "05:14"},
-            {"start_time": "37:48", "end_time": "42:47", "level": 1, "keywords": "战斗场景", "gif_timestamp": "42:40"},
+            {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "05:14"},
+            {"start_time": "08:26", "end_time": "14:42", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "08:58"},
+            {"start_time": "19:20", "end_time": "19:53", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "19:27"},
+            {"start_time": "22:48", "end_time": "34:30", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "28:12"},
+            {"start_time": "37:48", "end_time": "42:47", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "42:40"},
+            {"start_time": "49:50", "end_time": "56:46", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "56:37"},
         ]
     }
 }
@@ -70,18 +74,25 @@ GAMES_DATA = {
 # =============================
 
 def show_system_1():
-    st.header("📊 系统一：暴力程度时间轴分析")
+    # 0. 初始化引导状态 (如果不存在)
+    if 'guide_step' not in st.session_state:
+        st.session_state.guide_step = 0  # 0: 第一步, 1: 第二步, 2: 引导结束
+
+    st.header("📊 系统一：Vis-Rate 暴力程度时间轴分析")
     
     LEVEL_MAP = {1: "轻度", 2: "中度", 3: "重度"}
     LEVEL_ORDER = ["轻度", "中度", "重度"]
     
-    selected_game = st.selectbox("选择游戏", list(GAMES_DATA.keys()), key="s1_game")
+    game_list = list(GAMES_DATA.keys())
+    selected_game = st.selectbox("选择游戏", game_list, key="s1_game")
     game_cfg = GAMES_DATA[selected_game]
 
     st.subheader("📄 游戏内容总结")
     st.markdown(f'<div style="background-color:#f5f7fa; padding:20px; border-radius:8px; font-size:20px; color:#2c3e50;">{game_cfg["summary"]}</div>', unsafe_allow_html=True)
 
     st.subheader("📈 暴力程度时间轴")
+    
+    # 构造数据
     events = []
     base_time = pd.Timestamp("1970-01-01")
     total_sec = time_str_to_seconds(game_cfg["video_duration_str"])
@@ -97,10 +108,12 @@ def show_system_1():
         })
     
     df = pd.DataFrame(events)
+    # 补充空轴分类
     for lvl in LEVEL_ORDER:
         if lvl not in df["level"].values:
             df = pd.concat([df, pd.DataFrame([{"ID": -1, "start": base_time, "end": base_time, "level": lvl}])])
 
+    # 绘制时间轴
     fig = px.timeline(
         df, x_start="start", x_end="end", y="level", color="level",
         category_orders={"level": LEVEL_ORDER},
@@ -108,18 +121,53 @@ def show_system_1():
         color_discrete_map={"轻度": "#FDB462", "中度": "#FB6A4A", "重度": "#CB181D"},
         range_x=[base_time, end_video_time]
     )
-    fig.update_layout(height=200, margin=dict(l=20, r=20, t=10, b=20), xaxis=dict(tickformat="%H:%M:%S", title="视频时间"), yaxis=dict(title=None))
-    
-    # 交互处理：使用更安全的访问方式
+    fig.update_layout(
+        height=220, 
+        margin=dict(l=20, r=20, t=10, b=20), 
+        xaxis=dict(tickformat="%H:%M:%S", title="视频时间"), 
+        yaxis=dict(title=None)
+    )
+
+    # --- 引导逻辑：仅在第一款游戏且引导未完成时显示 ---
+    if selected_game == game_list[0] and st.session_state.guide_step < 2:
+        if st.session_state.guide_step == 0:
+            # 指向第一个事件方块
+            target = df.iloc[0]
+            fig.add_annotation(
+                x=target['start'], y=target['level'],
+                text="点击我可以查看 3s 的事件视频",
+                showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2,
+                ax=0, ay=-50, bgcolor="#FFFD96", bordercolor="#B8860B", font=dict(size=14, color="black")
+            )
+        elif st.session_state.guide_step == 1:
+            # 指向第二个事件方块 (如果存在)
+            target = df.iloc[1] if len(df) > 1 else df.iloc[0]
+            fig.add_annotation(
+                x=target['start'], y=target['level'],
+                text="切换事件会显示不同的视频内容",
+                showarrow=True, arrowhead=2, arrowsize=1, arrowwidth=2,
+                ax=0, ay=-50, bgcolor="#D1F2EB", bordercolor="#16A085", font=dict(size=14, color="black")
+            )
+
+    # 显示图表
     event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
     st.subheader("🎬 事件动态预览")
     
-    # 修复 KeyError：增加结构校验
+    # 交互处理
     points = event_data.get("selection", {}).get("points", [])
     if points:
+        # --- 引导状态跳转 ---
+        if selected_game == game_list[0]:
+            if st.session_state.guide_step == 0:
+                st.session_state.guide_step = 1
+                st.rerun()
+            elif st.session_state.guide_step == 1:
+                st.session_state.guide_step = 2
+                st.rerun()
+
+        # 视频渲染逻辑
         point = points[0]
-        # 从 customdata 提取 ID
         custom_data = point.get("customdata", [])
         if custom_data and custom_data[0] != -1:
             clicked_id = custom_data[0]
@@ -129,7 +177,6 @@ def show_system_1():
             vid_path = os.path.join("static", "video_cache", f"{prefix}_evt_{clicked_id}_{time_str_to_seconds(ts_str)}s.mp4")
             
             if os.path.exists(vid_path):
-                # 优化：直接使用 st.video 加载路径，不走 Base64，大幅提升速度
                 st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
             else:
                 st.error(f"找不到视频文件: {vid_path}")
@@ -146,13 +193,11 @@ def show_system_2():
     st.markdown(f"""
     <div style="background-color:#f8f9fa; padding:20px; border-radius:10px; border-left:8px solid #e74c3c; margin-bottom:20px;">
         <p style="font-size:20px;"><strong>年龄评级:</strong> <span style="font-size:28px; color:#e74c3c;">{data['esrb_level']}</span></p>
-        <p style="font-size:18px;"><strong>关键提示词:</strong> {data['keywords']}</p>
-        <hr>
-        <p style="font-size:18px; line-height:1.6;">{data['summary']}</p>
+        <p style="font-size:18px;"><strong>暴力相关的关键词:</strong> {data['keywords']}</p>
     </div>
     """, unsafe_allow_html=True)
 
-    st.subheader("🖼️ 评级示意图")
+    st.subheader("🖼️ 游戏封面图")
     img_path = os.path.join("static", "images", f"{data['prefix']}_cover.png")
     if os.path.exists(img_path):
         # 控制图片宽度，防止在上下布局中显得过大
@@ -194,17 +239,17 @@ if st.session_state.page == 'home':
     
     with center_col:
         st.write("### 请选择下方其中一个系统进行体验：")
-        if st.button("🚀 系统 1：暴力时间轴分析", use_container_width=True):
+        if st.button("🚀 系统 1：Vis-Rate 暴力程度时间轴分析", use_container_width=True):
             st.session_state.page = "系统 1"
             st.rerun()
         
         st.write("") 
-        if st.button("🖼️ 系统 2：静态信息展示", use_container_width=True):
+        if st.button("🖼️ 系统 2：ESRB 游戏年龄评级", use_container_width=True):
             st.session_state.page = "系统 2"
             st.rerun()
             
         st.write("") 
-        if st.button("🎥 系统 3：动态语义展示", use_container_width=True):
+        if st.button("🎥 系统 3：Common Sense Media 暴力内容总结", use_container_width=True):
             st.session_state.page = "系统 3"
             st.rerun()
 
