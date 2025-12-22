@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import os
 import base64
-import time
 
 # =============================
 # 1. 基础配置与工具函数
@@ -33,7 +32,7 @@ def time_str_to_seconds(t: str) -> int:
     return 0
 
 # =============================
-# 2. 数据配置 (基于 Word 文档内容)
+# 2. 数据配置
 # =============================
 GAMES_DATA = {
     "Red Dead Redemption 2": {
@@ -75,7 +74,7 @@ GAMES_DATA = {
 }
 
 # =============================
-# 3. 各子系统界面
+# 3. 各子系统界面函数
 # =============================
 
 def show_system_1():
@@ -87,11 +86,9 @@ def show_system_1():
     selected_game = st.selectbox("选择游戏", list(GAMES_DATA.keys()), key="s1_game")
     game_cfg = GAMES_DATA[selected_game]
 
-    # 区域一：内容总结
     st.subheader("📄 游戏内容总结")
     st.markdown(f'<div style="background-color:#f5f7fa; padding:20px; border-radius:8px; font-size:20px; color:#2c3e50;">{game_cfg["summary"]}</div>', unsafe_allow_html=True)
 
-    # 区域二：时间轴
     st.subheader("📈 暴力程度时间轴")
     events = []
     base_time = pd.Timestamp("1970-01-01")
@@ -108,7 +105,6 @@ def show_system_1():
         })
     
     df = pd.DataFrame(events)
-    # 补充空轴
     for lvl in LEVEL_ORDER:
         if lvl not in df["level"].values:
             df = pd.concat([df, pd.DataFrame([{"ID": -1, "start": base_time, "end": base_time, "level": lvl}])])
@@ -120,11 +116,10 @@ def show_system_1():
         color_discrete_map={"轻度": "#FDB462", "中度": "#FB6A4A", "重度": "#CB181D"},
         range_x=[base_time, end_video_time]
     )
-    fig.update_layout(height=200, margin=dict(l=20, r=20, t=10, b=20), xaxis=dict(tickformat="%H:%M:%S", title="视频时间"), yaxis=dict(title=None, tickfont=dict(size=18)))
+    fig.update_layout(height=200, margin=dict(l=20, r=20, t=10, b=20), xaxis=dict(tickformat="%H:%M:%S", title="视频时间"), yaxis=dict(title=None))
     
     selected_point = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
-    # 区域三：视频预览
     st.subheader("🎬 事件动态预览")
     selection = selected_point.get("selection", {}).get("points", [])
     if selection:
@@ -154,10 +149,7 @@ def show_system_2():
         st.markdown(f"""
         **年龄评级:** <span style="font-size:24px; color:#e74c3c;">{data['esrb_level']}</span>  
         **关键提示词:** {data['keywords']}  
-        
-        **详细描述:** <div style="background-color:#fdfefe; padding:15px; border-left:5px solid #3498db; font-size:18px;">
-        {data['summary']}
-        </div>
+        **详细描述:** <div style="background-color:#fdfefe; padding:15px; border-left:5px solid #3498db; font-size:18px;">{data['summary']}</div>
         """, unsafe_allow_html=True)
 
     with col2:
@@ -188,35 +180,41 @@ def show_system_3():
 # 4. 页面导航逻辑
 # =============================
 
+# 初始化页面状态
 if 'page' not in st.session_state:
     st.session_state.page = 'home'
 
 if st.session_state.page == 'home':
-    # 欢迎页面
-    st.write("# ")
+    # --- 欢迎页面渲染 ---
     st.write("# ")
     st.markdown("<h1 style='text-align: center;'>欢迎您参加关于“电子游戏评级信息呈现方式”的学术研究项目</h1>", unsafe_allow_html=True)
     st.write("---")
-    st.write("请选择下方其中一个系统进行体验：")
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("系统 1：暴力时间轴分析", use_container_width=True):
+    # 居中对齐容器
+    _, center_col, _ = st.columns([1, 2, 1])
+    
+    with center_col:
+        st.write("### 请选择下方其中一个系统进行体验：")
+        # 修改为竖向排列
+        if st.button("🚀 系统 1：暴力时间轴分析", use_container_width=True):
             st.session_state.page = "系统 1"
             st.rerun()
-    with col2:
-        if st.button("系统 2：静态信息展示", use_container_width=True):
+        
+        st.write("") # 增加间距
+        if st.button("🖼️ 系统 2：静态信息展示", use_container_width=True):
             st.session_state.page = "系统 2"
             st.rerun()
-    with col3:
-        if st.button("系统 3：动态语义展示", use_container_width=True):
+            
+        st.write("") # 增加间距
+        if st.button("🎥 系统 3：动态语义展示", use_container_width=True):
             st.session_state.page = "系统 3"
             st.rerun()
 
 else:
-    # 侧边栏导航模式
+    # --- 进入系统后的侧边栏 ---
     with st.sidebar:
         st.title("🚀 系统切换")
+        # 修复逻辑点：确保选项字符串与下方 if 判断一致
         nav_selection = st.radio(
             "前往：",
             ["系统 1", "系统 2", "系统 3"],
@@ -231,10 +229,11 @@ else:
             st.session_state.page = 'home'
             st.rerun()
 
-    # 根据状态渲染页面
-    if st.session_state.page == "系统 1: Vis-Rate":
+    # --- 页面内容路由渲染 ---
+    # 修复逻辑点：移除多余的后缀，确保与 session_state.page 字符串完全匹配
+    if st.session_state.page == "系统 1":
         show_system_1()
-    elif st.session_state.page == "系统 2: ESRB":
+    elif st.session_state.page == "系统 2":
         show_system_2()
-    elif st.session_state.page == "系统 3: Common Sense Media":
+    elif st.session_state.page == "系统 3":
         show_system_3()
