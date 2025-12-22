@@ -4,6 +4,14 @@ import plotly.express as px
 import os
 import base64
 
+import time
+
+# 1. 在 app.py 顶部（或适当位置）定义这个转换函数
+def get_video_base64(file_path):
+    with open(file_path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
 # =============================
 # 页面配置
 # =============================
@@ -145,8 +153,9 @@ with st.container():
     selected = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
 
+
 # ======================================================
-# 🧱 区域三：事件动态预览 (兼容性修复版)
+# 🧱 区域三：事件动态预览 (终极修复版：Base64 + 强制刷新)
 # ======================================================
 with st.container():
     st.subheader("🎬 事件动态预览")
@@ -171,34 +180,39 @@ with st.container():
 
     # --- 渲染逻辑 ---
     if selected_row is not None:
-        # 1. 定义所有变量，防止 NameError
+        # 【修复 NameError】：在使用变量前必须先定义它们
         evt_id = int(selected_row["ID"])
         prefix = game_cfg["file_prefix"]
         ts_str = selected_row["gif_timestamp_str"]
         gif_seconds = time_str_to_seconds(ts_str)
         
+        # 构造路径
         video_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.mp4"
         local_video_path = os.path.join("static", "video_cache", video_filename)
 
         if os.path.exists(local_video_path):
-            # 2. 以二进制模式读取视频文件 (这样 Streamlit 处理最稳定)
-            with open(local_video_path, 'rb') as v_file:
-                video_bytes = v_file.read()
+            # 2. 将视频转为 Base64 字符串
+            v_base64 = get_video_base64(local_video_path)
             
-            # 3. 调用 st.video (移除低版本不支持的 autoplay/loop/muted 参数)
-            # 使用 key 确保切换事件时视频组件强制刷新
-            st.video(
-                video_bytes, 
-                format="video/mp4",
-                key=f"vid_player_{evt_id}" 
+            # 【修复不刷新问题】：添加一个随机生成的 ID，强制浏览器重新渲染 video 标签
+            refresh_key = f"{evt_id}_{int(time.time())}"
+            
+            st.markdown(
+                f'''
+                <div id="wrapper-{refresh_key}" style="display: flex; flex-direction: column; align-items: center;">
+                    <video key="{refresh_key}" width="600" autoplay loop muted playsinline 
+                           style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                        <source src="data:video/mp4;base64,{v_base64}" type="video/mp4">
+                        您的浏览器不支持视频播放。
+                    </video>
+                    <p style="margin-top: 10px; font-size: 18px; text-align: center;">
+                        <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
+                    </p>
+                </div>
+                ''',
+                unsafe_allow_html=True
             )
-            
-            st.markdown(f"""
-                <p style="text-align: center; font-size: 18px; margin-top: 10px;">
-                    <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
-                </p>
-            """, unsafe_allow_html=True)
         else:
-            st.error(f"找不到视频文件: {local_video_path}")
+            st.error(f"文件未找到: {local_video_path}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
