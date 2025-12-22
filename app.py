@@ -141,7 +141,7 @@ with st.container():
     )
 
     fig.update_layout(
-        height=300,
+        height=200,
         margin=dict(l=20, r=20, t=10, b=20),
         showlegend=True,
         xaxis=dict(tickformat="%H:%M:%S", title="视频时间", tickfont=dict(size=14)),
@@ -200,7 +200,7 @@ with st.container():
             st.markdown(
                 f'''
                 <div id="wrapper-{refresh_key}" style="display: flex; flex-direction: column; align-items: center;">
-                    <video key="{refresh_key}" width="600" autoplay loop muted playsinline 
+                    <video key="{refresh_key}" width="1000" autoplay loop muted playsinline 
                            style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
                         <source src="data:video/mp4;base64,{v_base64}" type="video/mp4">
                         您的浏览器不支持视频播放。
