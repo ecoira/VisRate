@@ -74,8 +74,11 @@ GAMES_DATA = {
 # =============================
 
 def show_system_1():
+    # 1. 初始化引导与点击追踪状态
     if 'guide_step' not in st.session_state:
         st.session_state.guide_step = 0
+    if 'last_seen_id' not in st.session_state:
+        st.session_state.last_seen_id = None
 
     st.header("📊 系统一：Vis-Rate 暴力程度时间轴分析")
     
@@ -86,11 +89,20 @@ def show_system_1():
     selected_game = st.selectbox("选择游戏", game_list, key="s1_game")
     game_cfg = GAMES_DATA[selected_game]
 
-    # 内容总结
+    # --- 提前检测点击行为，用于即时更新引导状态 ---
+    # 利用 plotly_chart 的 key 可以在渲染前获取上一轮的交互状态
+    current_selection = st.session_state.get("timeline_chart", {}).get("selection", {}).get("points", [])
+    if current_selection and selected_game == game_list[0]:
+        current_id = current_selection[0].get("customdata", [-1])[0]
+        # 如果检测到新的点击（ID 变化），立即增加引导步数
+        if current_id != st.session_state.last_seen_id and current_id != -1:
+            st.session_state.guide_step += 1
+            st.session_state.last_seen_id = current_id
+
+    # 数据准备
     st.subheader("📄 游戏内容总结")
     st.markdown(f'<div style="background-color:#f5f7fa; padding:20px; border-radius:8px; font-size:18px; color:#2c3e50; line-height:1.6;">{game_cfg["summary"]}</div>', unsafe_allow_html=True)
 
-    # 准备数据
     events = []
     base_time = pd.Timestamp("1970-01-01")
     total_sec = time_str_to_seconds(game_cfg["video_duration_str"])
@@ -103,7 +115,7 @@ def show_system_1():
             "ID": idx,
             "start": start_ts,
             "end": end_ts,
-            "center": start_ts + (end_ts - start_ts) / 2, # 计算中心点
+            "center": start_ts + (end_ts - start_ts) / 2, # 指向方块中心
             "level": LEVEL_MAP[e["level"]],
             "gif_timestamp_str": e["gif_timestamp"]
         })
@@ -122,66 +134,61 @@ def show_system_1():
         range_x=[base_time, end_video_time]
     )
 
-    # --- 引导 UI 优化 ---
+    # --- 引导 UI：样式美化与精确定位 ---
     if selected_game == game_list[0] and st.session_state.guide_step < 2:
         step = st.session_state.guide_step
-        # 选取对应的目标
-        target = df.iloc[step] if len(df) > step else df.iloc[0]
+        # 确定箭头指向的目标方块
+        target_row = df.iloc[step] if len(df) > step else df.iloc[0]
         
-        guide_text = "✨ 点击我可以查看 3s 的事件视频" if step == 0 else "🔄 切换不同方块会显示对应视频"
-        guide_color = "#FFF9C4" if step == 0 else "#E0F2F1"
-        border_color = "#FBC02D" if step == 0 else "#4DB6AC"
+        guide_text = "✨ 点击查看 3s 事件视频" if step == 0 else "🔄 切换事件查看不同内容"
+        guide_bg = "#FFF9C4" if step == 0 else "#E0F2F1"
+        guide_border = "#FBC02D" if step == 0 else "#4DB6AC"
 
         fig.add_annotation(
-            x=target['center'], # 指向中心
-            y=target['level'],
+            x=target_row['center'], # 坐标正中心
+            y=target_row['level'],
             text=guide_text,
             showarrow=True,
-            arrowhead=3, # 更锋利的箭头
+            arrowhead=3, # 更有设计感的箭头
             arrowsize=1.2,
             arrowwidth=2,
             arrowcolor="#444",
-            ax=0, ay=-60, # 垂直上方 60 像素
-            font=dict(size=15, color="#333", family="Arial"),
-            bgcolor=guide_color,
-            bordercolor=border_color,
+            ax=0, ay=-55, # 位于方块上方
+            font=dict(size=14, color="#333"),
+            bgcolor=guide_bg,
+            bordercolor=guide_border,
             borderwidth=2,
-            borderpad=8, # 增加文字内边距，更好看
+            borderpad=8, # 气泡内边距
             opacity=0.95
         )
 
-    fig.update_layout(height=240, margin=dict(l=20, r=20, t=10, b=20), xaxis=dict(tickformat="%M:%S", title="视频时间轴"), yaxis=dict(title=None))
+    fig.update_layout(
+        height=240, 
+        margin=dict(l=20, r=20, t=10, b=20), 
+        xaxis=dict(tickformat="%M:%S", title="视频时间轴"), 
+        yaxis=dict(title=None, tickfont=dict(size=14))
+    )
     
-    event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+    # 注意这里使用了 key="timeline_chart"，这是实现“点击即更新”的关键
+    event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="timeline_chart")
 
+    # --- 视频渲染区域 ---
     st.subheader("🎬 事件动态预览")
-    
-    # 交互处理逻辑
     points = event_data.get("selection", {}).get("points", [])
+    
     if points:
         point = points[0]
         custom_data = point.get("customdata", [])
-        
         if custom_data and custom_data[0] != -1:
             clicked_id = custom_data[0]
             ts_str = custom_data[1]
             prefix = game_cfg["prefix"]
             vid_path = os.path.join("static", "video_cache", f"{prefix}_evt_{clicked_id}_{time_str_to_seconds(ts_str)}s.mp4")
             
-            # --- 先渲染视频 ---
             if os.path.exists(vid_path):
                 st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
             else:
                 st.error(f"找不到视频文件: {vid_path}")
-
-            # --- 后更新引导状态 ---
-            # 如果是第一款游戏，根据当前步骤自增
-            if selected_game == game_list[0]:
-                if st.session_state.guide_step < 2:
-                    # 注意：这里我们不使用 st.rerun()，因为视频已经渲染出来了。
-                    # 当用户下一次点击或刷新时，guide_step 会生效。
-                    # 或者我们可以强制增加 step，但为了让用户看到视频，我们不立即重置整个页面。
-                    st.session_state.guide_step += 1
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
 
