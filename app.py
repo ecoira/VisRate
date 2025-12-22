@@ -206,7 +206,6 @@ with st.container():
                         您的浏览器不支持视频播放。
                     </video>
                     <p style="margin-top: 10px; font-size: 18px; text-align: center;">
-                        <b>事件详情</b>：{selected_row['keywords']} | <b>等级</b>：{selected_row['level']}
                     </p>
                 </div>
                 ''',
