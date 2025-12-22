@@ -3,63 +3,24 @@ import pandas as pd
 import plotly.express as px
 import os
 import base64
-
 import time
 
-# 1. 在 app.py 顶部（或适当位置）定义这个转换函数
+# =============================
+# 1. 基础配置与工具函数
+# =============================
+st.set_page_config(
+    page_title="电子游戏评级信息研究平台",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
 def get_video_base64(file_path):
+    """将视频转换为Base64以解决Streamlit播放刷新问题"""
+    if not os.path.exists(file_path):
+        return None
     with open(file_path, "rb") as f:
         data = f.read()
     return base64.b64encode(data).decode()
-
-# =============================
-# 页面配置
-# =============================
-st.set_page_config(
-    page_title="暴力内容分析系统",
-    layout="wide"
-)
-
-LEVEL_MAP = {1: "轻度", 2: "中度", 3: "重度"}
-LEVEL_ORDER = ["轻度", "中度", "重度"]
-
-# (GAMES_CONFIG 部分保持不变...)
-GAMES_CONFIG = {
-    "Red Dead Redemption 2": {
-        "file_prefix": "Red",
-        "summary": "本作包含频繁的第一人称及第三人称枪战，并通过慢动作镜头特写子弹穿透敌人、血液自伤口喷涌而出的暴力画面。此外，游戏中还存在野兽撕咬人类并导致大量出血的血腥场景，以及静态的动物尸体图像。",
-        "video_duration_str": "01:01:03",
-        "raw_events": [
-            {"start_time": "07:30", "end_time": "11:23", "level": 2, "keywords": "与人枪战", "gif_timestamp": "09:29"},
-            {"start_time": "14:28", "end_time": "16:15", "level": 1, "keywords": "空手打斗", "gif_timestamp": "15:47"},
-            {"start_time": "26:34", "end_time": "27:04", "level": 1, "keywords": "马的尸体", "gif_timestamp": "26:38"},
-            {"start_time": "31:05", "end_time": "36:50", "level": 2, "keywords": "与野兽枪战，野兽撕咬", "gif_timestamp": "34:02"},
-            {"start_time": "51:04", "end_time": "59:36", "level": 2, "keywords": "与人枪战", "gif_timestamp": "55:02"},
-        ]
-    },
-    "Detroit: Become Human": {
-        "file_prefix": "Detroit",
-        "summary": "本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，并深入探讨了仿生人内部的分裂——例如，作为执法者的仿生人与其普通同类之间的对立。游戏中包含对犯罪现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
-        "video_duration_str": "01:00:06",
-        "raw_events": [
-            {"start_time": "02:20", "end_time": "09:29", "level": 1, "keywords": "案发现场", "gif_timestamp": "02:27"},
-            {"start_time": "15:13", "end_time": "16:45", "level": 1, "keywords": "枪击仿生人", "gif_timestamp": "16:09"},
-        ]
-    },
-    "Hades": {
-        "file_prefix": "Hades",
-        "summary": "快节奏的动作战斗是核心玩法，玩家在游戏中主要操控剑、矛、盾、弓等神话冷兵器与冥界怪物进行高频率的砍杀对抗。当敌人或玩家受伤时，画面会出现鲜红的血液喷涌特效和地面积血细节，但敌人死亡后通常会化为光点或烟雾迅速消散。",
-        "video_duration_str": "01:00:22",
-        "raw_events": [
-            {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "05:14"},
-            {"start_time": "08:26", "end_time": "14:42", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "08:58"},
-            {"start_time": "19:20", "end_time": "19:53", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "19:27"},
-            {"start_time": "22:48", "end_time": "34:30", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "28:12"},
-            {"start_time": "37:48", "end_time": "42:47", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "42:40"},
-            {"start_time": "49:50", "end_time": "56:46", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "56:37"},
-        ]
-    }
-}
 
 def time_str_to_seconds(t: str) -> int:
     parts = t.split(":")
@@ -72,45 +33,70 @@ def time_str_to_seconds(t: str) -> int:
     return 0
 
 # =============================
-# 选择游戏
+# 2. 数据配置 (基于 Word 文档内容)
 # =============================
-selected_game = st.selectbox("选择游戏", list(GAMES_CONFIG.keys()))
-game_cfg = GAMES_CONFIG[selected_game]
+GAMES_DATA = {
+    "Red Dead Redemption 2": {
+        "prefix": "Red",
+        "esrb_level": "17+ (M - Mature)",
+        "keywords": "鲜血与血腥, 强烈暴力 (Blood and Gore, Intense Violence)",
+        "summary": "玩家使用旧西部武器进行第一人称和第三人称战斗。慢动作镜头展示了子弹穿透敌人，血液从伤口喷涌而出的画面。一个使用加特林机枪的任务导致角色的肢体和面部血肉横飞。游戏中包含酷刑和屠杀的场景。",
+        "video_duration_str": "01:01:03",
+        "raw_events": [
+            {"start_time": "07:30", "end_time": "11:23", "level": 2, "keywords": "与人枪战", "gif_timestamp": "09:29"},
+            {"start_time": "14:28", "end_time": "16:15", "level": 1, "keywords": "空手打斗", "gif_timestamp": "15:47"},
+            {"start_time": "26:34", "end_time": "27:04", "level": 1, "keywords": "马的尸体", "gif_timestamp": "26:38"},
+            {"start_time": "31:05", "end_time": "36:50", "level": 2, "keywords": "与野兽枪战", "gif_timestamp": "34:02"},
+            {"start_time": "51:04", "end_time": "59:36", "level": 2, "keywords": "与人枪战", "gif_timestamp": "55:02"},
+        ]
+    },
+    "Detroit: Become Human": {
+        "prefix": "Detroit",
+        "esrb_level": "17+ (M - Mature)",
+        "keywords": "含血液, 强烈暴力 (Blood, Intense Violence)",
+        "summary": "玩家角色经常以各种方式对其他角色进行拳打、射击、刺伤和伤害。展示了血迹斑斑的尸体和处决场面。此外，还有家庭暴力的场景，既有屏幕上直接展示的，也有暗示或发生在屏幕之外的。",
+        "video_duration_str": "01:00:06",
+        "raw_events": [
+            {"start_time": "02:20", "end_time": "09:29", "level": 1, "keywords": "案发现场", "gif_timestamp": "02:27"},
+            {"start_time": "15:13", "end_time": "16:45", "level": 1, "keywords": "枪击仿生人", "gif_timestamp": "16:09"},
+        ]
+    },
+    "Hades": {
+        "prefix": "Hades",
+        "esrb_level": "13+ (T - Teenager)",
+        "keywords": "含血液, 暴力 (Blood, Violence)",
+        "summary": "战斗是这款动作游戏的核心。你会看到一些血溅效果，当主角“死亡”时，你可能会看到他被尖刺刺穿，或者脸朝下倒在一滩血泊中。战斗中可以使用各种武器及魔法攻击。",
+        "video_duration_str": "01:00:22",
+        "raw_events": [
+            {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "战斗场景", "gif_timestamp": "05:14"},
+            {"start_time": "37:48", "end_time": "42:47", "level": 1, "keywords": "战斗场景", "gif_timestamp": "42:40"},
+        ]
+    }
+}
 
-st.title(f"🎮 {selected_game} 暴力内容分析")
+# =============================
+# 3. 各子系统界面
+# =============================
 
-# ======================================================
-# 🧱 区域一：游戏内容总结 (文字已放大)
-# ======================================================
-with st.container():
+def show_system_1():
+    st.header("📊 系统一：暴力程度时间轴分析")
+    
+    LEVEL_MAP = {1: "轻度", 2: "中度", 3: "重度"}
+    LEVEL_ORDER = ["轻度", "中度", "重度"]
+    
+    selected_game = st.selectbox("选择游戏", list(GAMES_DATA.keys()), key="s1_game")
+    game_cfg = GAMES_DATA[selected_game]
+
+    # 区域一：内容总结
     st.subheader("📄 游戏内容总结")
-    st.markdown(
-        f"""
-        <div style="
-            background-color:#f5f7fa;
-            padding:20px;
-            border-radius:8px;
-            line-height:1.8;
-            font-size:20px; /* 这里从 15px 改到了 20px */
-            font-weight: 400;
-            color: #2c3e50;
-        ">
-        {game_cfg["summary"]}
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown(f'<div style="background-color:#f5f7fa; padding:20px; border-radius:8px; font-size:20px; color:#2c3e50;">{game_cfg["summary"]}</div>', unsafe_allow_html=True)
 
-# ======================================================
-# 🧱 区域二：暴力程度时间轴 (坐标轴字体已放大)
-# ======================================================
-with st.container():
-    st.subheader("📊 暴力程度时间轴")
-
+    # 区域二：时间轴
+    st.subheader("📈 暴力程度时间轴")
     events = []
     base_time = pd.Timestamp("1970-01-01")
-    total_duration_sec = time_str_to_seconds(game_cfg["video_duration_str"])
-    end_video_time = base_time + pd.Timedelta(seconds=total_duration_sec)
+    total_sec = time_str_to_seconds(game_cfg["video_duration_str"])
+    end_video_time = base_time + pd.Timedelta(seconds=total_sec)
 
     for idx, e in enumerate(game_cfg["raw_events"]):
         events.append({
@@ -118,100 +104,137 @@ with st.container():
             "start": base_time + pd.Timedelta(seconds=time_str_to_seconds(e["start_time"])),
             "end": base_time + pd.Timedelta(seconds=time_str_to_seconds(e["end_time"])),
             "level": LEVEL_MAP[e["level"]],
-            "keywords": e["keywords"],
             "gif_timestamp_str": e["gif_timestamp"]
         })
-
+    
     df = pd.DataFrame(events)
-
-    # 补充空数据确保 y 轴完整
+    # 补充空轴
     for lvl in LEVEL_ORDER:
-        if df.empty or lvl not in df["level"].values:
-            df = pd.concat([df, pd.DataFrame([{"ID": -1, "start": base_time, "end": base_time + pd.Timedelta(seconds=0.1), "level": lvl, "keywords": "无事件", "gif_timestamp_str": ""}])])
-
-    df = df.reset_index(drop=True)
+        if lvl not in df["level"].values:
+            df = pd.concat([df, pd.DataFrame([{"ID": -1, "start": base_time, "end": base_time, "level": lvl}])])
 
     fig = px.timeline(
         df, x_start="start", x_end="end", y="level", color="level",
         category_orders={"level": LEVEL_ORDER},
         custom_data=["ID"],
-        hover_data={"ID": False, "level": True, "start": True, "end": True}, 
         color_discrete_map={"轻度": "#FDB462", "中度": "#FB6A4A", "重度": "#CB181D"},
         range_x=[base_time, end_video_time]
     )
+    fig.update_layout(height=200, margin=dict(l=20, r=20, t=10, b=20), xaxis=dict(tickformat="%H:%M:%S", title="视频时间"), yaxis=dict(title=None, tickfont=dict(size=18)))
+    
+    selected_point = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
 
-    fig.update_layout(
-        height=200,
-        margin=dict(l=20, r=20, t=10, b=20),
-        showlegend=True,
-        xaxis=dict(tickformat="%H:%M:%S", title="视频时间", tickfont=dict(size=14)),
-        # 放大 y 轴（轻度、中度、重度）的字体
-        yaxis=dict(title=None, tickfont=dict(size=18, color="black")),
-        legend=dict(font=dict(size=14))
-    )
-
-    selected = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
-
-
-
-# ======================================================
-# 🧱 区域三：事件动态预览 (终极修复版：Base64 + 强制刷新)
-# ======================================================
-with st.container():
+    # 区域三：视频预览
     st.subheader("🎬 事件动态预览")
-
-    selected_row = None 
-    selection = selected.get("selection", {})
-    points = selection.get("points", [])
-
-    if points:
-        point_data = points[0]
-        raw_custom_data = point_data.get("customdata", [])
-        clicked_id = -1
-        if isinstance(raw_custom_data, list) and len(raw_custom_data) > 0:
-            clicked_id = int(raw_custom_data[0])
-        elif isinstance(raw_custom_data, dict):
-            clicked_id = int(raw_custom_data.get("0", raw_custom_data.get(0, -1)))
-
+    selection = selected_point.get("selection", {}).get("points", [])
+    if selection:
+        clicked_id = selection[0].get("customdata", [-1])[0]
         if clicked_id != -1:
-            match = df[df["ID"] == clicked_id]
-            if not match.empty:
-                selected_row = match.iloc[0]
-
-    # --- 渲染逻辑 ---
-    if selected_row is not None:
-        # 【修复 NameError】：在使用变量前必须先定义它们
-        evt_id = int(selected_row["ID"])
-        prefix = game_cfg["file_prefix"]
-        ts_str = selected_row["gif_timestamp_str"]
-        gif_seconds = time_str_to_seconds(ts_str)
-        
-        # 构造路径
-        video_filename = f"{prefix}_evt_{evt_id}_{gif_seconds}s.mp4"
-        local_video_path = os.path.join("static", "video_cache", video_filename)
-
-        if os.path.exists(local_video_path):
-            # 2. 将视频转为 Base64 字符串
-            v_base64 = get_video_base64(local_video_path)
+            row = df[df["ID"] == clicked_id].iloc[0]
+            prefix = game_cfg["prefix"]
+            ts_str = row["gif_timestamp_str"]
+            vid_path = os.path.join("static", "video_cache", f"{prefix}_evt_{clicked_id}_{time_str_to_seconds(ts_str)}s.mp4")
             
-            # 【修复不刷新问题】：添加一个随机生成的 ID，强制浏览器重新渲染 video 标签
-            refresh_key = f"{evt_id}_{int(time.time())}"
-            
-            st.markdown(
-                f'''
-                <div id="wrapper-{refresh_key}" style="display: flex; flex-direction: column; align-items: center;">
-                    <video key="{refresh_key}" width="1000" autoplay loop muted playsinline 
-                           style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
-                        <source src="data:video/mp4;base64,{v_base64}" type="video/mp4">
-                        您的浏览器不支持视频播放。
-                    </video>
-                    <p style="margin-top: 10px; font-size: 18px; text-align: center;">
-                    </p>
-                </div>
-                ''',
-                unsafe_allow_html=True
-            )
-        else:
-            st.error(f"文件未找到: {local_video_path}")
+            v_base64 = get_video_base64(vid_path)
+            if v_base64:
+                st.markdown(f'<video width="900" autoplay loop muted playsinline><source src="data:video/mp4;base64,{v_base64}" type="video/mp4"></video>', unsafe_allow_html=True)
+            else:
+                st.error(f"找不到视频文件: {vid_path}")
     else:
         st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
+
+def show_system_2():
+    st.header("🖼️ 系统二：ESRB 游戏年龄评级")
+    selected_game = st.selectbox("选择游戏", list(GAMES_DATA.keys()), key="s2_game")
+    data = GAMES_DATA[selected_game]
+
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.subheader("📋 评级详情")
+        st.markdown(f"""
+        **年龄评级:** <span style="font-size:24px; color:#e74c3c;">{data['esrb_level']}</span>  
+        **关键提示词:** {data['keywords']}  
+        
+        **详细描述:** <div style="background-color:#fdfefe; padding:15px; border-left:5px solid #3498db; font-size:18px;">
+        {data['summary']}
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.subheader("🖼️ 评级示意图")
+        img_path = os.path.join("static", "images", f"{data['prefix']}_cover.png")
+        if os.path.exists(img_path):
+            st.image(img_path, caption=f"{selected_game} 评级参考图", use_container_width=True)
+        else:
+            st.warning(f"图片未找到: {img_path}")
+
+def show_system_3():
+    st.header("🎥 系统三：Common Sense Media 暴力内容总结")
+    selected_game = st.selectbox("选择游戏", list(GAMES_DATA.keys()), key="s3_game")
+    data = GAMES_DATA[selected_game]
+
+    st.subheader("📄 暴力行为描述")
+    st.markdown(f'<div style="font-size:22px; padding:10px; color:#2c3e50;">{data["summary"]}</div>', unsafe_allow_html=True)
+
+    st.subheader("📽️ 暴力内容典型片段演示")
+    vid_path = os.path.join("static", "videos", f"{data['prefix']}_demo.mp4")
+    v_base64 = get_video_base64(vid_path)
+    if v_base64:
+        st.markdown(f'<video width="100%" controls autoplay loop muted><source src="data:video/mp4;base64,{v_base64}" type="video/mp4"></video>', unsafe_allow_html=True)
+    else:
+        st.warning(f"视频演示文件未找到: {vid_path}")
+
+# =============================
+# 4. 页面导航逻辑
+# =============================
+
+if 'page' not in st.session_state:
+    st.session_state.page = 'home'
+
+if st.session_state.page == 'home':
+    # 欢迎页面
+    st.write("# ")
+    st.write("# ")
+    st.markdown("<h1 style='text-align: center;'>欢迎您参加关于“电子游戏评级信息呈现方式”的学术研究项目</h1>", unsafe_allow_html=True)
+    st.write("---")
+    st.write("请选择下方其中一个系统进行体验：")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("系统 1：暴力时间轴分析", use_container_width=True):
+            st.session_state.page = "系统 1"
+            st.rerun()
+    with col2:
+        if st.button("系统 2：静态信息展示", use_container_width=True):
+            st.session_state.page = "系统 2"
+            st.rerun()
+    with col3:
+        if st.button("系统 3：动态语义展示", use_container_width=True):
+            st.session_state.page = "系统 3"
+            st.rerun()
+
+else:
+    # 侧边栏导航模式
+    with st.sidebar:
+        st.title("🚀 系统切换")
+        nav_selection = st.radio(
+            "前往：",
+            ["系统 1", "系统 2", "系统 3"],
+            index=["系统 1", "系统 2", "系统 3"].index(st.session_state.page)
+        )
+        if nav_selection != st.session_state.page:
+            st.session_state.page = nav_selection
+            st.rerun()
+        
+        st.write("---")
+        if st.button("⬅️ 返回主页"):
+            st.session_state.page = 'home'
+            st.rerun()
+
+    # 根据状态渲染页面
+    if st.session_state.page == "系统 1: Vis-Rate":
+        show_system_1()
+    elif st.session_state.page == "系统 2: ESRB":
+        show_system_2()
+    elif st.session_state.page == "系统 3: Common Sense Media":
+        show_system_3()
