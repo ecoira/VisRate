@@ -30,8 +30,9 @@ GAMES_DATA = {
     "Red Dead Redemption 2": {
         "prefix": "Red",
         "esrb_level": "17+ (M - Mature)",
+        "violence_score": 5,  # 新增：5分
         "keywords": "鲜血与血腥, 强烈暴力 (Blood and Gore, Intense Violence)",
-        "summary": "玩家使用旧西部武器进行第一人称和第三人称战斗。慢动作镜头展示了子弹穿透敌人，血液从伤口喷涌而出的画面。一个使用加特林机枪的任务导致角色的肢体和面部血肉横飞。游戏中包含酷刑和屠杀的场景。",
+        "summary": "玩家使用旧西部武器（左轮手枪、步枪、霰弹枪、猎刀、战斧）进行第一人称和第三人称战斗。慢动作镜头展示了子弹穿透敌人，血液从伤口喷涌而出的画面。一个使用加特林机枪的任务导致角色的肢体和面部血肉横飞。游戏中包含酷刑和屠杀的场景，例如有人被吊在树上，早已被遗弃的干瘪腐烂的尸体，以及一个流血的躯干被悬挂在桥下，内脏滴落到地面上，形成一滩血污。",
         "video_duration_str": "01:01:03",
         "raw_events": [
             {"start_time": "07:30", "end_time": "11:23", "level": 2, "keywords": "与人枪战", "gif_timestamp": "09:29"},
@@ -44,6 +45,7 @@ GAMES_DATA = {
     "Detroit: Become Human": {
         "prefix": "Detroit",
         "esrb_level": "17+ (M - Mature)",
+        "violence_score": 4,  # 新增：5分
         "keywords": "含血液, 强烈暴力 (Blood, Intense Violence)",
         "summary": "玩家角色经常以各种方式对其他角色进行拳打、射击、刺伤和伤害。展示了血迹斑斑的尸体和处决场面。此外，还有家庭暴力的场景，既有屏幕上直接展示的，也有暗示或发生在屏幕之外的。",
         "video_duration_str": "01:00:06",
@@ -55,8 +57,9 @@ GAMES_DATA = {
     "Hades": {
         "prefix": "Hades",
         "esrb_level": "13+ (T - Teenager)",
+        "violence_score": 3,  # 新增：5分
         "keywords": "含血液, 暴力 (Blood, Violence)",
-        "summary": "战斗是这款动作游戏的核心。你会看到一些血溅效果，当主角“死亡”时，你可能会看到他被尖刺刺穿，或者脸朝下倒在一滩血泊中。战斗中可以使用各种武器及魔法攻击。",
+        "summary": "战斗是这款动作游戏的核心，但尽管暴力场面不少，游戏却并非写实风格，也没有采用沉浸式视角（例如第一人称视角或虚拟现实）。你会看到一些血溅效果，当你的主角“死亡”（没错，他是永生的，但他会耗尽能量）时，你可能会看到他被尖刺刺穿，或者脸朝下倒在一滩血泊中。战斗中可以使用各种武器（剑、锤子、弓箭），以及随着游戏进程获得的魔法攻击。",
         "video_duration_str": "01:00:22",
         "raw_events": [
             {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "05:14"},
@@ -208,6 +211,20 @@ def show_system_3():
     st.header("🎥 系统三：Common Sense Media 暴力内容总结")
     selected_game = st.selectbox("选择游戏", list(GAMES_DATA.keys()), key="s3_game")
     data = GAMES_DATA[selected_game]
+
+    # --- 新增：暴力与恐怖频率评分条渲染 ---
+    score = data.get("violence_score", 0)
+    # 生成圆圈字符串：实心圆 * 分数 + 空心圆 * (5 - 分数)
+    # 实心圆用 \u25CF (●)，空心圆用 \u25CB (○)
+    circles_html = f"<span style='color:black; font-size:32px;'>{'●' * score}{'○' * (5 - score)}</span>"
+    
+    st.markdown(f"""
+        <div style="display: flex; align-items: center; margin-bottom: 20px;">
+            <span style="font-size: 24px; font-weight: bold; margin-right: 15px;">暴力与恐怖频率：</span>
+            {circles_html}
+        </div>
+    """, unsafe_allow_html=True)
+    # --- 评分条结束 ---
 
     st.subheader("📄 暴力行为描述")
     st.markdown(f'<div style="font-size:22px; padding:20px; background-color:#fff4f4; border-radius:10px; color:#2c3e50; margin-bottom:20px;">{data["summary"]}</div>', unsafe_allow_html=True)
