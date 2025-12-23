@@ -212,28 +212,31 @@ def show_system_3():
     selected_game = st.selectbox("选择游戏", list(GAMES_DATA.keys()), key="s3_game")
     data = GAMES_DATA[selected_game]
 
-    # --- 新增：暴力与恐怖频率评分条渲染 ---
+    # --- 核心修改：将频率作为标题 ---
     score = data.get("violence_score", 0)
-    # 生成圆圈字符串：实心圆 * 分数 + 空心圆 * (5 - 分数)
-    # 实心圆用 \u25CF (●)，空心圆用 \u25CB (○)
-    circles_html = f"<span style='color:black; font-size:32px;'>{'●' * score}{'○' * (5 - score)}</span>"
+    filled_circles = "●" * score
+    empty_circles = "○" * (5 - score)
     
+    # 使用 HTML 模拟图片中的标题样式
     st.markdown(f"""
-        <div style="display: flex; align-items: center; margin-bottom: 20px;">
-            <span style="font-size: 24px; font-weight: bold; margin-right: 15px;">暴力与恐怖频率：</span>
-            {circles_html}
+        <div style="display: flex; align-items: center; margin-top: 25px; margin-bottom: 10px;">
+            <span style="font-size: 26px; font-weight: bold; margin-right: 20px;">暴力与恐怖频率：</span>
+            <span style="font-size: 32px; letter-spacing: 5px;">{filled_circles}{empty_circles}</span>
         </div>
     """, unsafe_allow_html=True)
-    # --- 评分条结束 ---
 
-    st.subheader("📄 暴力行为描述")
-    st.markdown(f'<div style="font-size:22px; padding:20px; background-color:#fff4f4; border-radius:10px; color:#2c3e50; margin-bottom:20px;">{data["summary"]}</div>', unsafe_allow_html=True)
+    # 紧随其后的文字描述块
+    st.markdown(f"""
+        <div style="font-size:22px; padding:25px; background-color:#fff4f4; border-radius:12px; color:#2c3e50; line-height:1.6; border: 1px solid #ffebeb;">
+            {data["summary"]}
+        </div>
+    """, unsafe_allow_html=True)
 
+    # 下方的视频演示
+    st.write("---") # 添加分割线美化布局
     st.subheader("📽️ 暴力内容典型片段演示")
     vid_path = os.path.join("static", "videos", f"{data['prefix']}_demo.mp4")
     
-    # 优化点：使用 st.video 直接加载物理路径。
-    # Base64 转换大视频会导致浏览器卡顿且切换缓慢，st.video 支持流式传输，即点即播。
     if os.path.exists(vid_path):
         st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
     else:
