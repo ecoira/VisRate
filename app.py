@@ -109,6 +109,7 @@ def show_system_1():
     st.subheader("📄 游戏内容总结")
     st.markdown(f'<div style="background-color:#f5f7fa; padding:20px; border-radius:8px; font-size:18px; color:#2c3e50; line-height:1.6;">{game_cfg["summary1"]}</div>', unsafe_allow_html=True)
 
+    st.subheader("📊 暴力程度时间轴")
     events = []
     base_time = pd.Timestamp("1970-01-01")
     total_sec = time_str_to_seconds(game_cfg["video_duration_str"])
