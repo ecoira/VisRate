@@ -32,7 +32,8 @@ GAMES_DATA = {
         "esrb_level": "17+ (M - Mature)",
         "violence_score": 5,  # 新增：5分
         "keywords": "鲜血与血腥, 强烈暴力 (Blood and Gore, Intense Violence)",
-        "summary": "玩家使用旧西部武器（左轮手枪、步枪、霰弹枪、猎刀、战斧）进行第一人称和第三人称战斗。慢动作镜头展示了子弹穿透敌人，血液从伤口喷涌而出的画面。一个使用加特林机枪的任务导致角色的肢体和面部血肉横飞。游戏中包含酷刑和屠杀的场景，例如有人被吊在树上，早已被遗弃的干瘪腐烂的尸体，以及一个流血的躯干被悬挂在桥下，内脏滴落到地面上，形成一滩血污。",
+        "summary1": "本作包含频繁的第一人称及第三人称枪战，并通过慢动作镜头特写子弹穿透敌人、血液自伤口喷涌而出的暴力画面。此外，游戏中还存在野兽撕咬人类并导致大量出血的血腥场景，以及静态的动物尸体图像。",
+        "summary3": "玩家使用旧西部武器（左轮手枪、步枪、霰弹枪、猎刀、战斧）进行第一人称和第三人称战斗。慢动作镜头展示了子弹穿透敌人，血液从伤口喷涌而出的画面。一个使用加特林机枪的任务导致角色的肢体和面部血肉横飞。游戏中包含酷刑和屠杀的场景，例如有人被吊在树上，早已被遗弃的干瘪腐烂的尸体，以及一个流血的躯干被悬挂在桥下，内脏滴落到地面上，形成一滩血污。",
         "video_duration_str": "01:01:03",
         "raw_events": [
             {"start_time": "07:30", "end_time": "11:23", "level": 2, "keywords": "与人枪战", "gif_timestamp": "09:29"},
@@ -47,7 +48,8 @@ GAMES_DATA = {
         "esrb_level": "17+ (M - Mature)",
         "violence_score": 4,  # 新增：5分
         "keywords": "含血液, 强烈暴力 (Blood, Intense Violence)",
-        "summary": "玩家角色经常以各种方式对其他角色进行拳打、射击、刺伤和伤害。展示了血迹斑斑的尸体和处决场面。此外，还有家庭暴力的场景，既有屏幕上直接展示的，也有暗示或发生在屏幕之外的。",
+        "summary1": "本作的核心剧情聚焦于仿生人与人类之间的尖锐冲突，游戏中包含对犯罪现场的直接描绘，其中会涉及人类尸体与血迹。此外，剧情还包含枪击仿生人的暴力场面，其标志性的蓝色血液是本作一个独特的视觉特征。",
+        "summary3": "玩家角色经常以各种方式对其他角色进行拳打、射击、刺伤和伤害。展示了血迹斑斑的尸体和处决场面。此外，还有家庭暴力的场景，既有屏幕上直接展示的，也有暗示或发生在屏幕之外的。",
         "video_duration_str": "01:00:06",
         "raw_events": [
             {"start_time": "02:20", "end_time": "09:29", "level": 1, "keywords": "案发现场", "gif_timestamp": "02:27"},
@@ -59,7 +61,8 @@ GAMES_DATA = {
         "esrb_level": "13+ (T - Teenager)",
         "violence_score": 3,  # 新增：5分
         "keywords": "含血液, 暴力 (Blood, Violence)",
-        "summary": "战斗是这款动作游戏的核心，但尽管暴力场面不少，游戏却并非写实风格，也没有采用沉浸式视角（例如第一人称视角或虚拟现实）。你会看到一些血溅效果，当你的主角“死亡”（没错，他是永生的，但他会耗尽能量）时，你可能会看到他被尖刺刺穿，或者脸朝下倒在一滩血泊中。战斗中可以使用各种武器（剑、锤子、弓箭），以及随着游戏进程获得的魔法攻击。",
+        "summary1": "快节奏的动作战斗是核心玩法，玩家在游戏中主要操控剑、矛、盾、弓等神话冷兵器与冥界怪物进行高频率的砍杀对抗。当敌人或玩家受伤时，画面会出现鲜红的血液喷溅特效和地面积血细节，但敌人死亡后通常会化为光点或烟雾迅速消散。",
+        "summary3": "战斗是这款动作游戏的核心，但尽管暴力场面不少，游戏却并非写实风格，也没有采用沉浸式视角（例如第一人称视角或虚拟现实）。你会看到一些血溅效果，当你的主角“死亡”（没错，他是永生的，但他会耗尽能量）时，你可能会看到他被尖刺刺穿，或者脸朝下倒在一滩血泊中。战斗中可以使用各种武器（剑、锤子、弓箭），以及随着游戏进程获得的魔法攻击。",
         "video_duration_str": "01:00:22",
         "raw_events": [
             {"start_time": "01:10", "end_time": "06:10", "level": 1, "keywords": "腹部中枪", "gif_timestamp": "05:14"},
@@ -104,7 +107,7 @@ def show_system_1():
 
     # 2. 数据准备
     st.subheader("📄 游戏内容总结")
-    st.markdown(f'<div style="background-color:#f5f7fa; padding:20px; border-radius:8px; font-size:18px; color:#2c3e50; line-height:1.6;">{game_cfg["summary"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="background-color:#f5f7fa; padding:20px; border-radius:8px; font-size:18px; color:#2c3e50; line-height:1.6;">{game_cfg["summary1"]}</div>', unsafe_allow_html=True)
 
     events = []
     base_time = pd.Timestamp("1970-01-01")
@@ -228,7 +231,7 @@ def show_system_3():
     # 紧随其后的文字描述块
     st.markdown(f"""
         <div style="font-size:22px; padding:25px; background-color:#fff4f4; border-radius:12px; color:#2c3e50; line-height:1.6; border: 1px solid #ffebeb;">
-            {data["summary"]}
+            {data["summary3"]}
         </div>
     """, unsafe_allow_html=True)
 
