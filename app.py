@@ -175,6 +175,8 @@ def show_system_1():
     # 4. 视频显示逻辑（使用在代码开头截获的点击信息）
     st.subheader("🎬 事件动态预览")
     
+    # --- 找到你的视频显示逻辑部分，修改如下 ---
+
     if clicked_info and clicked_info[0] != -1:
         clicked_id = clicked_info[0]
         ts_str = clicked_info[1]
@@ -182,12 +184,14 @@ def show_system_1():
         vid_path = os.path.join("static", "video_cache", f"{prefix}_evt_{clicked_id}_{time_str_to_seconds(ts_str)}s.mp4")
         
         if os.path.exists(vid_path):
-            # 这里的视频会随着第一次点击立即渲染
-            st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
+            # 1. 创建三列，[1, 2, 1] 表示左右各占 1/4，中间占 2/4 (即 50%)
+            # 你可以根据需要调整比例，如 [1, 1, 1] 会更小
+            col1, col2, col3 = st.columns([1, 2, 1]) 
+            
+            with col2: # 在中间这一列显示视频
+                st.video(vid_path, format="video/mp4", autoplay=True, loop=True, muted=True)
         else:
             st.error(f"找不到视频文件: {vid_path}")
-    else:
-        st.info("💡 请点击上方时间轴中的彩色方块查看视频片段")
 
 def show_system_2():
     st.header("🖼️ 系统二：ESRB 游戏年龄评级")
